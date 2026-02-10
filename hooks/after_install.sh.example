@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Example hook: runs after installation completes
+# Rename to after_install.sh and chmod +x to activate
+echo "Hook: after_install"

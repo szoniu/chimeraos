@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# bootstrap.sh — chimera-bootstrap and apk operations
+source "${LIB_DIR}/protection.sh"
+
+# bootstrap_install — Install base Chimera Linux system
+bootstrap_install() {
+    einfo "Installing Chimera Linux base system..."
+
+    if [[ "${DRY_RUN}" == "1" ]]; then
+        einfo "[DRY-RUN] Would run chimera-bootstrap ${MOUNTPOINT}"
+        return 0
+    fi
+
+    # chimera-bootstrap installs base-full by default
+    # -l flag = local (from live ISO, offline)
+    # without -l = network install (downloads latest)
+    if has_network; then
+        try "Bootstrap Chimera Linux (network)" \
+            chimera-bootstrap "${MOUNTPOINT}"
+    else
+        try "Bootstrap Chimera Linux (local/offline)" \
+            chimera-bootstrap -l "${MOUNTPOINT}"
+    fi
+
+    einfo "Base system installed to ${MOUNTPOINT}"
+}
+
+# apk_update — Update package database and upgrade
+apk_update() {
+    einfo "Updating package database..."
+
+    try "Updating apk index" \
+        chroot_exec "apk update"
+
+    try "Upgrading packages" \
+        chroot_exec "apk upgrade --available"
+
+    einfo "Packages up to date"
+}
+
+# apk_install — Install packages via apk inside chroot
+# Usage: apk_install "description" pkg1 pkg2 ...
+apk_install() {
+    local desc="$1"
+    shift
+    local -a pkgs=("$@")
+
+    if [[ ${#pkgs[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    try "${desc}" \
+        chroot_exec "apk add ${pkgs[*]}"
+}
+
+# apk_install_if_available — Install package only if it exists in repo
+apk_install_if_available() {
+    local pkg="$1"
+
+    if chroot_exec "apk search -e ${pkg}" >> "${LOG_FILE}" 2>&1; then
+        try "Installing ${pkg}" chroot_exec "apk add ${pkg}"
+    else
+        ewarn "Package ${pkg} not found in repositories, skipping"
+    fi
+}
+
+# enable_user_repo — Enable the user repository
+enable_user_repo() {
+    einfo "Enabling user repository..."
+    try "Enabling chimera-repo-user" \
+        chroot_exec "apk add chimera-repo-user"
+    try "Updating repos" \
+        chroot_exec "apk update"
+}
