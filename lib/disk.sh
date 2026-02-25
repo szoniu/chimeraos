@@ -82,6 +82,8 @@ disk_plan_auto() {
     # LUKS encryption
     if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
         LUKS_PARTITION="${ROOT_PARTITION}"
+        # Note: cryptsetup luksFormat reads passphrase from stdin interactively
+        # --batch-mode only suppresses confirmation, not the passphrase prompt
         disk_plan_add "Setup LUKS encryption on ${ROOT_PARTITION}" \
             cryptsetup luksFormat --batch-mode "${ROOT_PARTITION}"
         disk_plan_add "Open LUKS partition" \
@@ -273,9 +275,9 @@ unmount_filesystems() {
         swapoff "${SWAP_PARTITION}" 2>/dev/null || true
     fi
 
-    # Unmount in reverse order
+    # Unmount in reverse order (anchored match to avoid partial path collisions)
     local -a mounts
-    readarray -t mounts < <(mount | grep "${MOUNTPOINT}" | awk '{print $3}' | sort -r)
+    readarray -t mounts < <(awk -v mp="${MOUNTPOINT}" '$3 == mp || $3 ~ "^"mp"/" {print $3}' /proc/mounts | sort -r)
 
     local mnt
     for mnt in "${mounts[@]}"; do

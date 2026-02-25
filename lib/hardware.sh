@@ -42,7 +42,7 @@ detect_gpu() {
     einfo "GPU line: ${gpu_line}"
 
     local pci_ids
-    pci_ids=$(echo "${gpu_line}" | grep -oP '\[\w{4}:\w{4}\]' | tail -1) || true
+    pci_ids=$(echo "${gpu_line}" | grep -o '\[[0-9a-fA-F]*:[0-9a-fA-F]*\]' | tail -1) || true
     local vendor_id device_id
     vendor_id=$(echo "${pci_ids}" | tr -d '[]' | cut -d: -f1)
     device_id=$(echo "${pci_ids}" | tr -d '[]' | cut -d: -f2)
@@ -115,18 +115,28 @@ detect_esp() {
     WINDOWS_DETECTED=0
     WINDOWS_ESP=""
 
-    while IFS= read -r line; do
-        [[ -z "${line}" ]] && continue
-        local dev uuid type parttype
-        eval "${line}"
+    while IFS= read -r block; do
+        [[ -z "${block}" ]] && continue
+        # Parse key=value pairs safely without eval
+        local DEVNAME="" UUID="" TYPE="" PART_ENTRY_TYPE=""
+        while IFS='=' read -r key val; do
+            case "${key}" in
+                DEVNAME)          DEVNAME="${val}" ;;
+                UUID)             UUID="${val}" ;;
+                TYPE)             TYPE="${val}" ;;
+                PART_ENTRY_TYPE)  PART_ENTRY_TYPE="${val}" ;;
+            esac
+        done <<< "${block}"
+
+        local dev="${DEVNAME}" type="${TYPE}" parttype="${PART_ENTRY_TYPE}"
 
         if [[ "${parttype:-}" == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" ]] || \
            [[ "${type:-}" == "vfat" && "${parttype:-}" == "c12a7328"* ]]; then
             ESP_PARTITIONS+=("${dev}")
             einfo "Found ESP: ${dev}"
 
-            local tmp_mount="/tmp/esp-check-$$"
-            mkdir -p "${tmp_mount}"
+            local tmp_mount
+            tmp_mount=$(mktemp -d /tmp/esp-check-XXXXXX)
             if mount -o ro "${dev}" "${tmp_mount}" 2>/dev/null; then
                 if [[ -d "${tmp_mount}/EFI/Microsoft/Boot" ]]; then
                     WINDOWS_DETECTED=1
@@ -138,7 +148,7 @@ detect_esp() {
             rmdir "${tmp_mount}" 2>/dev/null || true
         fi
     done < <(blkid -o export 2>/dev/null | awk -v RS='' '{print}' | \
-             grep -i 'PARTTYPE.*c12a7328\|TYPE.*vfat' | head -20)
+             grep -i 'PART_ENTRY_TYPE.*c12a7328\|TYPE.*vfat' | head -20)
 
     # Fallback approach
     if [[ ${#ESP_PARTITIONS[@]} -eq 0 ]]; then
@@ -149,8 +159,8 @@ detect_esp() {
                 ESP_PARTITIONS+=("${part}")
                 einfo "Found ESP: ${part}"
 
-                local tmp_mount="/tmp/esp-check-$$"
-                mkdir -p "${tmp_mount}"
+                local tmp_mount
+                tmp_mount=$(mktemp -d /tmp/esp-check-XXXXXX)
                 if mount -o ro "${part}" "${tmp_mount}" 2>/dev/null; then
                     if [[ -d "${tmp_mount}/EFI/Microsoft/Boot" ]]; then
                         WINDOWS_DETECTED=1

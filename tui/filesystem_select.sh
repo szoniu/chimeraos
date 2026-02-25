@@ -3,6 +3,22 @@
 source "${LIB_DIR}/protection.sh"
 
 screen_filesystem_select() {
+    # In manual mode, auto-detect filesystem from existing partition
+    if [[ "${PARTITION_SCHEME:-}" == "manual" && -n "${ROOT_PARTITION:-}" ]]; then
+        local detected_fs
+        detected_fs=$(blkid -o value -s TYPE "${ROOT_PARTITION}" 2>/dev/null) || true
+        if [[ -n "${detected_fs}" && "${detected_fs}" =~ ^(ext4|btrfs|xfs)$ ]]; then
+            FILESYSTEM="${detected_fs}"
+            export FILESYSTEM
+            einfo "Auto-detected filesystem: ${FILESYSTEM} on ${ROOT_PARTITION}"
+
+            # Skip LUKS for manual (already set up or not)
+            LUKS_ENABLED="${LUKS_ENABLED:-no}"
+            export LUKS_ENABLED
+            return "${TUI_NEXT}"
+        fi
+    fi
+
     local current="${FILESYSTEM:-ext4}"
     local on_ext4="off" on_btrfs="off" on_xfs="off"
     case "${current}" in

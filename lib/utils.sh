@@ -136,6 +136,18 @@ is_root() {
     [[ "$(id -u)" -eq 0 ]]
 }
 
+# ensure_dns — Add fallback nameserver if DNS resolution fails
+ensure_dns() {
+    if ! ping -c 1 -W 3 chimera-linux.org &>/dev/null && ! ping -c 1 -W 3 google.com &>/dev/null; then
+        if ping -c 1 -W 3 8.8.8.8 &>/dev/null; then
+            ewarn "DNS resolution failed, adding fallback nameserver 8.8.8.8"
+            if ! grep -q '8.8.8.8' /etc/resolv.conf 2>/dev/null; then
+                echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+            fi
+        fi
+    fi
+}
+
 # has_network — Check basic network connectivity
 has_network() {
     ping -c 1 -W 3 chimera-linux.org &>/dev/null || \
@@ -184,6 +196,6 @@ get_cpu_count() {
 # generate_password_hash — Create SHA-512 password hash
 generate_password_hash() {
     local password="$1"
-    openssl passwd -6 "${password}" 2>/dev/null || \
-    python3 -c "import crypt; print(crypt.crypt('${password}', crypt.mksalt(crypt.METHOD_SHA512)))" 2>/dev/null
+    openssl passwd -6 -stdin <<< "${password}" 2>/dev/null || \
+    CHIMERA_PW="${password}" python3 -c "import crypt, os; print(crypt.crypt(os.environ['CHIMERA_PW'], crypt.mksalt(crypt.METHOD_SHA512)))" 2>/dev/null
 }

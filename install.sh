@@ -73,6 +73,7 @@ cleanup() {
     return ${rc}
 }
 trap cleanup EXIT
+trap 'trap - EXIT; cleanup; exit 130' INT
 
 # --- Parse arguments ---
 MODE="full"
@@ -200,6 +201,7 @@ preflight_checks() {
     if [[ "${DRY_RUN}" != "1" ]]; then
         is_root || die "Must run as root"
         is_efi || die "UEFI boot mode required"
+        ensure_dns
         has_network || die "Network connectivity required"
     fi
 

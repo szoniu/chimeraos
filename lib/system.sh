@@ -22,12 +22,19 @@ system_set_timezone() {
 
 system_set_hostname() {
     local hostname="${HOSTNAME:-chimera}"
+
+    # Validate hostname (RFC 1123)
+    if [[ ! "${hostname}" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
+        ewarn "Invalid hostname '${hostname}', falling back to 'chimera'"
+        hostname="chimera"
+    fi
+
     einfo "Setting hostname: ${hostname}"
 
     chroot_exec "echo '${hostname}' > /etc/hostname"
 
     # Update /etc/hosts
-    chroot_exec "cat > /etc/hosts << 'HOSTSEOF'
+    chroot_exec "cat > /etc/hosts << HOSTSEOF
 # /etc/hosts
 127.0.0.1   localhost
 ::1         localhost
@@ -198,10 +205,10 @@ install_networking() {
 system_create_users() {
     einfo "Creating users..."
 
-    # Set root password
+    # Set root password (chpasswd -e avoids exposing hash in process list)
     if [[ -n "${ROOT_PASSWORD_HASH:-}" ]]; then
         try "Setting root password" \
-            chroot_exec "usermod -p '${ROOT_PASSWORD_HASH}' root"
+            chroot_exec "echo 'root:${ROOT_PASSWORD_HASH}' | chpasswd -e"
     fi
 
     # Create regular user
@@ -213,7 +220,7 @@ system_create_users() {
 
         if [[ -n "${USER_PASSWORD_HASH:-}" ]]; then
             try "Setting user password" \
-                chroot_exec "usermod -p '${USER_PASSWORD_HASH}' ${USERNAME}"
+                chroot_exec "echo '${USERNAME}:${USER_PASSWORD_HASH}' | chpasswd -e"
         fi
 
         # Setup doas (Chimera uses doas instead of sudo by default)

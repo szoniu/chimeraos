@@ -3,7 +3,11 @@
 source "${LIB_DIR}/protection.sh"
 
 screen_swap_config() {
+    # Pre-select "partition" if SWAP_PARTITION already set (e.g. manual mode)
     local current="${SWAP_TYPE:-zram}"
+    if [[ -n "${SWAP_PARTITION:-}" && "${current}" == "zram" ]]; then
+        current="partition"
+    fi
     local on_zram="off" on_partition="off" on_none="off"
     case "${current}" in
         zram)      on_zram="on" ;;

@@ -44,8 +44,10 @@ ping -c 3 chimera-linux.org
 
 ```bash
 nmcli device wifi list
-nmcli device wifi connect "NazwaSieci" password "TwojeHaslo"
+nmcli device wifi connect 'NazwaSieci' password 'TwojeHaslo'
 ```
+
+> **Uwaga**: Uzywaj **pojedynczych cudzyslowow** `'...'` w nmcli. Podwojne cudzyslowy moga powodowac problemy ze znakami specjalnymi w nazwie sieci lub hasle.
 
 **`nmtui`** (tekstowy interfejs NetworkManager):
 
@@ -65,7 +67,17 @@ exit
 
 Sprawdz: `ping -c 3 chimera-linux.org`
 
-### 4. Sklonuj repo i uruchom
+### 4. Ustaw date (wazne!)
+
+Live ISO moze miec nieprawidlowa date systemowa. Ustaw ja **przed** klonowaniem repo:
+
+```bash
+date -s "2026-02-25 12:00:00"
+```
+
+Bez poprawnej daty `git clone` moze nie dzialac (blad SSL "certificate is not yet valid").
+
+### 5. Sklonuj repo i uruchom
 
 ```bash
 sudo su
@@ -84,7 +96,7 @@ cd chimeraos-main
 ./install.sh
 ```
 
-### 5. Po instalacji
+### 6. Po instalacji
 
 Wyjmij pendrive, reboot. Zobaczysz bootloader (GRUB lub systemd-boot), potem SDDM z KDE Plasma 6.
 
@@ -156,6 +168,57 @@ presets/desktop-nvidia-open.conf   # NVIDIA (open) + LUKS + GRUB
 
 Presety przenosne — sprzet re-wykrywany przy imporcie.
 
+## Typowe problemy
+
+### `git clone` nie dziala (SSL certificate not yet valid)
+
+Live ISO ma zla date. Napraw:
+
+```bash
+date -s "2026-02-25 12:00:00"
+```
+
+### DNS nie dziala (Temporary failure in name resolution)
+
+```bash
+echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+```
+
+Installer probuje to naprawic automatycznie (ensure_dns), ale jesli nie — dodaj recznie.
+
+### nmcli nie laczy z WiFi
+
+Uzywaj **pojedynczych cudzyslowow**:
+
+```bash
+nmcli device wifi connect 'MojaSiec' password 'MojeHaslo'
+```
+
+### Instalacja przez SSH
+
+Na Chimera Live mozesz podlaczyc sie przez SSH z innego komputera:
+
+```bash
+# Na Live ISO:
+passwd root                     # Ustaw haslo roota
+dinitctl start sshd             # Uruchom SSH
+
+# Sprawdz IP:
+ip addr
+```
+
+Z innego komputera:
+
+```bash
+ssh -o PubkeyAuthentication=no root@ADRES_IP
+```
+
+> **Uwaga**: Jesli laptop jest na innej sieci (np. WiFi dla gosci), SSH nie zadziala. Oba urzadzenia musza byc w tej samej sieci LAN.
+
+### System sie zawiesza podczas instalacji
+
+Na maszynach z mala iloscia RAM (<8 GB) kompilacja duzych pakietow moze powodowac zawieszenie. Chimera uzywa binarnych paczek, wiec problem jest rzadszy niz przy Gentoo, ale nadal mozliwy.
+
 ## Co jesli cos pojdzie nie tak
 
 - **Blad** — menu: Retry / Shell / Continue / Log / Abort
@@ -189,7 +252,7 @@ install.sh              — Entry point
 configure.sh            — Wrapper: tylko wizard
 lib/                    — Moduly (constants, logging, dialog, hardware, disk, bootstrap...)
 tui/                    — 16 ekranow TUI
-data/                   — GPU database
+data/                   — GPU database, dialogrc theme
 presets/                — Gotowe presety
 hooks/                  — before/after hooks
 tests/                  — Testy

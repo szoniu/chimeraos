@@ -25,7 +25,11 @@ init_dialog() {
     einfo "Using dialog backend: ${DIALOG_CMD}"
 
     if [[ "${DIALOG_CMD}" == "dialog" ]]; then
-        export DIALOGRC=""
+        local rc_file="${DATA_DIR}/dialogrc"
+        if [[ -f "${rc_file}" ]]; then
+            export DIALOGRC="${rc_file}"
+            einfo "Loaded dialog theme from ${rc_file}"
+        fi
     fi
 }
 

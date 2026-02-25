@@ -194,6 +194,11 @@ install_extra_packages() {
         einfo "Installing extra packages: ${EXTRA_PACKAGES}"
         local pkg
         for pkg in ${EXTRA_PACKAGES}; do
+            # Validate package name (alphanumeric, hyphens, dots, underscores, slashes)
+            if [[ ! "${pkg}" =~ ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$ ]]; then
+                ewarn "Skipping invalid package name: ${pkg}"
+                continue
+            fi
             apk_install_if_available "${pkg}"
         done
     fi

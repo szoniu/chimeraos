@@ -9,20 +9,24 @@ config_save() {
     dir="$(dirname "${file}")"
     mkdir -p "${dir}"
 
-    {
-        echo "#!/usr/bin/env bash"
-        echo "# Chimera Linux TUI Installer configuration"
-        echo "# Generated: $(date -Iseconds)"
-        echo "# Version: ${INSTALLER_VERSION}"
-        echo ""
+    # Restrict permissions — file contains password hashes
+    (
+        umask 077
+        {
+            echo "#!/usr/bin/env bash"
+            echo "# Chimera Linux TUI Installer configuration"
+            echo "# Generated: $(date -Iseconds)"
+            echo "# Version: ${INSTALLER_VERSION}"
+            echo ""
 
-        local var
-        for var in "${CONFIG_VARS[@]}"; do
-            if [[ -n "${!var+x}" ]]; then
-                echo "${var}=${!var@Q}"
-            fi
-        done
-    } > "${file}"
+            local var
+            for var in "${CONFIG_VARS[@]}"; do
+                if [[ -n "${!var+x}" ]]; then
+                    echo "${var}=${!var@Q}"
+                fi
+            done
+        } > "${file}"
+    )
 
     einfo "Configuration saved to ${file}"
 }
@@ -36,15 +40,18 @@ config_load() {
         return 1
     fi
 
-    # Validate: only allow variable assignments for known CONFIG_VARS
+    # Build a filtered file with only known CONFIG_VARS assignments
+    local safe_file
+    safe_file=$(mktemp "${TMPDIR:-/tmp}/chimera-config-safe.XXXXXX")
+
     local line_num=0
     while IFS= read -r line; do
         (( line_num++ )) || true
-        # Skip comments and empty lines
-        [[ "${line}" =~ ^[[:space:]]*# ]] && continue
-        [[ "${line}" =~ ^[[:space:]]*$ ]] && continue
-        # Skip shebang
-        [[ "${line}" =~ ^#! ]] && continue
+        # Pass through comments and empty lines
+        if [[ "${line}" =~ ^[[:space:]]*# ]] || [[ "${line}" =~ ^[[:space:]]*$ ]] || [[ "${line}" =~ ^#! ]]; then
+            echo "${line}" >> "${safe_file}"
+            continue
+        fi
 
         # Must be a known variable assignment
         local var_name
@@ -64,11 +71,13 @@ config_load() {
             ewarn "Unknown variable at line ${line_num}: ${var_name} (skipping)"
             continue
         fi
+        echo "${line}" >> "${safe_file}"
     done < "${file}"
 
-    # Actually source the file
+    # Source the filtered file (only known variables)
     # shellcheck disable=SC1090
-    source "${file}"
+    source "${safe_file}"
+    rm -f "${safe_file}"
 
     einfo "Configuration loaded from ${file}"
 }
