@@ -164,6 +164,9 @@ disk_execute_plan() {
         esac
     fi
 
+    # Cleanup stale mounts/swap before partitioning
+    cleanup_target_disk
+
     disk_plan_show
 
     local i

@@ -5,6 +5,7 @@
 #   ./install.sh              — Run full installation (TUI wizard + install)
 #   ./install.sh --configure  — Run only the TUI wizard (generate config)
 #   ./install.sh --install    — Run only the installation (using existing config)
+#   ./install.sh --resume     — Resume interrupted installation (scan disks)
 #   ./install.sh --dry-run    — Run wizard + simulate installation
 #
 set -euo pipefail
@@ -62,6 +63,13 @@ source "${DATA_DIR}/gpu_database.sh"
 # --- Cleanup trap ---
 cleanup() {
     local rc=$?
+
+    # Restore stderr if it was redirected to log file (fd 4 saved by screen_progress)
+    if { true >&4; } 2>/dev/null; then
+        exec 2>&4
+        exec 4>&-
+    fi
+
     if mountpoint -q "${MOUNTPOINT}/proc" 2>/dev/null; then
         ewarn "Cleaning up mount points..."
         chroot_teardown || true
@@ -74,6 +82,7 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'trap - EXIT; cleanup; exit 130' INT
+trap 'trap - EXIT; cleanup; exit 143' TERM
 
 # --- Parse arguments ---
 MODE="full"
@@ -93,6 +102,7 @@ Commands:
   (default)       Run full installation (wizard + install)
   --configure     Run only the TUI configuration wizard
   --install       Run only the installation phase (requires config)
+  --resume        Resume interrupted installation (scan disks for checkpoints)
 
 Options:
   --config FILE   Use specified config file
@@ -111,6 +121,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --install)
             MODE="install"
+            shift
+            ;;
+        --resume)
+            MODE="resume"
             shift
             ;;
         --config)
@@ -239,6 +253,82 @@ main() {
             init_dialog
             screen_progress
             run_post_install
+            ;;
+        resume)
+            local resume_rc=0
+            try_resume_from_disk || resume_rc=$?
+
+            case ${resume_rc} in
+                0)
+                    # Config + checkpoints recovered
+                    config_load "${CONFIG_FILE}"
+                    init_dialog
+
+                    local completed_list=""
+                    local cp_name
+                    for cp_name in "${CHECKPOINTS[@]}"; do
+                        if checkpoint_reached "${cp_name}"; then
+                            completed_list+="  - ${cp_name}\n"
+                        fi
+                    done
+                    dialog_msgbox "Resume: Data Recovered" \
+                        "Found previous installation on ${RESUME_FOUND_PARTITION}.\n\nRecovered config and checkpoints:\n\n${completed_list}\nResuming installation..."
+
+                    screen_progress
+                    run_post_install
+                    ;;
+                1)
+                    # Only checkpoints, no config — try inference
+                    init_dialog
+
+                    local infer_rc=0
+                    infer_config_from_partition "${RESUME_FOUND_PARTITION}" "${RESUME_FOUND_FSTYPE}" || infer_rc=$?
+
+                    if [[ ${infer_rc} -eq 0 ]]; then
+                        config_save "${CONFIG_FILE}"
+
+                        local inferred_summary=""
+                        inferred_summary+="Partition: ${ROOT_PARTITION:-?}\n"
+                        inferred_summary+="Disk: ${TARGET_DISK:-?}\n"
+                        inferred_summary+="Filesystem: ${FILESYSTEM:-?}\n"
+                        inferred_summary+="ESP: ${ESP_PARTITION:-?}\n"
+                        [[ -n "${HOSTNAME:-}" ]] && inferred_summary+="Hostname: ${HOSTNAME}\n"
+                        [[ -n "${TIMEZONE:-}" ]] && inferred_summary+="Timezone: ${TIMEZONE}\n"
+                        [[ -n "${BOOTLOADER_TYPE:-}" ]] && inferred_summary+="Bootloader: ${BOOTLOADER_TYPE}\n"
+
+                        local completed_list=""
+                        local cp_name
+                        for cp_name in "${CHECKPOINTS[@]}"; do
+                            if checkpoint_reached "${cp_name}"; then
+                                completed_list+="  - ${cp_name}\n"
+                            fi
+                        done
+
+                        dialog_msgbox "Resume: Config Inferred" \
+                            "Found checkpoints on ${RESUME_FOUND_PARTITION} (no config file).\n\nInferred configuration:\n${inferred_summary}\nCompleted phases:\n${completed_list}\nResuming installation..."
+
+                        screen_progress
+                        run_post_install
+                    else
+                        dialog_msgbox "Resume: Partial Recovery" \
+                            "Found checkpoints on ${RESUME_FOUND_PARTITION} but could not fully infer configuration.\n\nSome fields have been pre-filled from the installed system.\nPlease complete the wizard. Completed phases will be skipped automatically."
+
+                        run_configuration_wizard
+                        screen_progress
+                        run_post_install
+                    fi
+                    ;;
+                2)
+                    # Nothing found
+                    init_dialog
+                    dialog_msgbox "Resume: Nothing Found" \
+                        "No previous installation data found on any partition.\n\nStarting full installation."
+
+                    run_configuration_wizard
+                    screen_progress
+                    run_post_install
+                    ;;
+            esac
             ;;
         *)
             die "Unknown mode: ${MODE}"

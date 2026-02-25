@@ -112,6 +112,7 @@ doas apk add pakiet
 ./install.sh                    # Pelna instalacja (wizard + install)
 ./install.sh --configure        # Tylko wizard (generuje config)
 ./install.sh --config plik.conf --install   # Z gotowego configa
+./install.sh --resume           # Wznowienie przerwanej instalacji
 ./install.sh --dry-run          # Symulacja bez dotykania dyskow
 ```
 
@@ -215,6 +216,8 @@ ssh -o PubkeyAuthentication=no root@ADRES_IP
 
 > **Uwaga**: Jesli laptop jest na innej sieci (np. WiFi dla gosci), SSH nie zadziala. Oba urzadzenia musza byc w tej samej sieci LAN.
 
+> **Tip**: Po restarcie Live ISO klucz SSH sie zmienia. Jesli `ssh` odmawia polaczenia ("WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED"), uruchom: `ssh-keygen -R ADRES_IP`
+
 ### System sie zawiesza podczas instalacji
 
 Na maszynach z mala iloscia RAM (<8 GB) kompilacja duzych pakietow moze powodowac zawieszenie. Chimera uzywa binarnych paczek, wiec problem jest rzadszy niz przy Gentoo, ale nadal mozliwy.
@@ -224,6 +227,7 @@ Na maszynach z mala iloscia RAM (<8 GB) kompilacja duzych pakietow moze powodowa
 - **Blad** — menu: Retry / Shell / Continue / Log / Abort
 - **Awaria** — checkpointy faz, wznowienie od ostatniego kroku
 - **Log** — `/tmp/chimera-installer.log`
+- **Wznowienie** — po awarii/restarcie: `./install.sh --resume` skanuje dyski, odzyskuje config i checkpointy, i wznawia od ostatniego ukonczonego kroku
 
 ## Roznice vs inne installery
 
@@ -240,8 +244,9 @@ Na maszynach z mala iloscia RAM (<8 GB) kompilacja duzych pakietow moze powodowa
 ## Testy
 
 ```bash
-bash tests/test_config.sh          # Config round-trip (13 assertions)
+bash tests/test_config.sh          # Config round-trip (16 assertions)
 bash tests/test_disk.sh            # Disk planning (9 assertions)
+bash tests/test_infer_config.sh    # Config inference from installed system (38 assertions)
 bash tests/shellcheck.sh           # Lint
 ```
 

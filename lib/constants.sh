@@ -2,7 +2,7 @@
 # constants.sh — Global constants for the Chimera Linux installer
 source "${LIB_DIR}/protection.sh"
 
-readonly INSTALLER_VERSION="1.0.0"
+readonly INSTALLER_VERSION="1.1.0"
 readonly INSTALLER_NAME="Chimera Linux TUI Installer"
 
 # Paths (use defaults, allow override from environment)
@@ -10,6 +10,7 @@ readonly INSTALLER_NAME="Chimera Linux TUI Installer"
 : "${CHROOT_INSTALLER_DIR:=/tmp/chimera-installer}"
 : "${LOG_FILE:=/tmp/chimera-installer.log}"
 : "${CHECKPOINT_DIR:=/tmp/chimera-installer-checkpoints}"
+: "${CHECKPOINT_DIR_SUFFIX:=/tmp/chimera-installer-checkpoints}"
 : "${CONFIG_FILE:=/tmp/chimera-installer.conf}"
 
 # Partition sizes (MiB)

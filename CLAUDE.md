@@ -33,7 +33,7 @@ lib/
 ├── protection.sh       — Guard: sprawdza $_CHIMERA_INSTALLER
 ├── constants.sh        — Stale, sciezki, CONFIG_VARS[]
 ├── logging.sh          — elog/einfo/ewarn/eerror/die/die_trace
-├── utils.sh            — try(), checkpoint_*, is_root/is_efi/has_network
+├── utils.sh            — try() (text fallback, LIVE_OUTPUT), checkpoint_*/validate/migrate, cleanup_target_disk, try_resume_from_disk, infer_config_from_partition
 ├── dialog.sh           — Wrapper dialog/whiptail, wizard runner
 ├── config.sh           — config_save/load/set/get (${VAR@Q})
 ├── hardware.sh         — detect_cpu/gpu/disks/esp
@@ -64,7 +64,7 @@ tui/
 ├── extra_packages.sh   — wolne pole apk packages
 ├── preset_save.sh      — eksport
 ├── summary.sh          — podsumowanie + YES + countdown
-└── progress.sh         — gauge + fazowa instalacja
+└── progress.sh         — resume detection + infobox/live output + fazowa instalacja
 
 data/
 └── gpu_database.sh     — GPU recommendation + microcode packages
@@ -95,8 +95,11 @@ tests/                  — test_config, test_disk, shellcheck
 ### Konwencje (identyczne jak w Gentoo/NixOS)
 
 - Ekrany TUI: `screen_*()` zwracaja 0=next, 1=back, 2=abort
-- `try` — interaktywne recovery na bledach
-- Checkpointy — wznowienie po awarii
+- `try` — interaktywne recovery na bledach, text fallback bez dialog, `LIVE_OUTPUT=1` via tee
+- Checkpointy — wznowienie po awarii, `checkpoint_validate` weryfikuje artefakty, `checkpoint_migrate_to_target` przenosi na dysk docelowy
+- `cleanup_target_disk` — odmontowuje partycje i swap przed partycjonowaniem
+- `--resume` — skanuje dyski (`try_resume_from_disk`), 0=config+checkpoints, 1=tylko checkpoints (inference), 2=nic
+- `infer_config_from_partition` — odczytuje konfiguracje z fstab, hostname, localtime, vconsole.conf, crypttab
 - `${VAR@Q}` — bezpieczny quoting w configach
 - `(( var++ )) || true` — pod set -e
 - `_CHIMERA_INSTALLER` — guard w protection.sh
@@ -132,8 +135,9 @@ tests/                  — test_config, test_disk, shellcheck
 ## Testy
 
 ```bash
-bash tests/test_config.sh          # 13 assertions
+bash tests/test_config.sh          # 16 assertions
 bash tests/test_disk.sh            # 9 assertions
+bash tests/test_infer_config.sh    # 38 assertions
 ```
 
 ## Jak dodawac opcje
