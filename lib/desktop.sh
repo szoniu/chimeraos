@@ -74,7 +74,7 @@ _install_gpu_drivers() {
 _install_nvidia_open() {
     einfo "Installing NVIDIA open-source drivers (NVK/nouveau)..."
 
-    apk_install "Installing NVIDIA firmware" firmware-linux-nvidia
+    apk_install "Installing NVIDIA firmware" linux-firmware-nvidia
 
     ewarn "Note: Chimera Linux does not support NVIDIA proprietary drivers."
     ewarn "Using NVK (nouveau Vulkan driver). Performance may be limited."
@@ -84,7 +84,7 @@ _install_nvidia_open() {
 _install_amd_drivers() {
     einfo "Installing AMD GPU drivers..."
 
-    apk_install "Installing AMD firmware" firmware-linux-amdgpu
+    apk_install "Installing AMD firmware" linux-firmware-amd
 
     einfo "AMD GPU drivers installed (RADV Vulkan)"
 }

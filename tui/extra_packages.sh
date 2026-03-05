@@ -16,9 +16,6 @@ screen_extra_packages() {
     items+=("v4l-utils"   "Video4Linux utilities"      "off")
 
     # --- Conditional items (hardware-detected) ---
-    if [[ "${ASUS_ROG_DETECTED:-0}" == "1" ]]; then
-        items+=("asusctl"  "ASUS ROG laptop control"   "on")
-    fi
     if [[ "${FINGERPRINT_DETECTED:-0}" == "1" ]]; then
         items+=("fprintd"  "Fingerprint authentication" "off")
     fi
@@ -37,7 +34,6 @@ screen_extra_packages() {
         || return "${TUI_BACK}"
 
     # Process selected items — set ENABLE_* flags
-    ENABLE_ASUSCTL="no"
     ENABLE_FINGERPRINT="no"
     ENABLE_THUNDERBOLT="no"
     ENABLE_SENSORS="no"
@@ -46,20 +42,19 @@ screen_extra_packages() {
     local pkg
     for pkg in ${selected}; do
         case "${pkg}" in
-            asusctl)           ENABLE_ASUSCTL="yes" ;;
             fprintd)           ENABLE_FINGERPRINT="yes" ;;
             bolt)              ENABLE_THUNDERBOLT="yes" ;;
             iio-sensor-proxy)  ENABLE_SENSORS="yes" ;;
             ModemManager)      ENABLE_WWAN="yes" ;;
         esac
     done
-    export ENABLE_ASUSCTL ENABLE_FINGERPRINT ENABLE_THUNDERBOLT ENABLE_SENSORS ENABLE_WWAN
+    export ENABLE_FINGERPRINT ENABLE_THUNDERBOLT ENABLE_SENSORS ENABLE_WWAN
 
     # Build EXTRA_PACKAGES from non-special items
     local -a extra_pkgs=()
     for pkg in ${selected}; do
         case "${pkg}" in
-            asusctl|fprintd|bolt|iio-sensor-proxy|ModemManager) ;;
+            fprintd|bolt|iio-sensor-proxy|ModemManager) ;;
             *) extra_pkgs+=("${pkg}") ;;
         esac
     done

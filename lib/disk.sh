@@ -126,14 +126,56 @@ disk_plan_dualboot() {
     fi
 
     if [[ -z "${ROOT_PARTITION:-}" ]]; then
-        disk_plan_add "Create root partition in free space" \
-            parted -s "${disk}" mkpart "Linux filesystem" ext4 0% 100%
+        # Find free space for the new partition
+        local free_start="" free_end=""
 
-        local part_count
-        part_count=$(lsblk -lno NAME "${disk}" 2>/dev/null | wc -l)
+        if [[ "${DRY_RUN:-0}" == "1" ]]; then
+            free_start="50%"
+            free_end="100%"
+        elif [[ -n "${SHRINK_PARTITION:-}" ]]; then
+            # After shrink, free space starts where the shrunk partition will end
+            # parted resizepart uses SHRINK_NEW_SIZE_MIB as end position
+            local part_num
+            part_num=$(echo "${SHRINK_PARTITION}" | sed 's/.*[^0-9]\([0-9]*\)$/\1/')
+            local part_line
+            part_line=$(parted -s "${disk}" unit MiB print 2>/dev/null \
+                | grep "^ *${part_num} " | head -1) || true
+            local orig_end_mib
+            orig_end_mib=$(echo "${part_line}" | awk '{gsub(/MiB/,""); print int($3)}')
+            free_start="${SHRINK_NEW_SIZE_MIB}MiB"
+            free_end="${orig_end_mib}MiB"
+        else
+            # Find largest existing free region
+            local free_info
+            free_info=$(parted -s "${disk}" unit MiB print free 2>/dev/null \
+                | awk '/[Ff]ree [Ss]pace/ {gsub(/MiB/,""); s=int($3); if(s>m){m=s; a=$1; b=$2}} END{print a+0, b+0}')
+            free_start="${free_info%% *}MiB"
+            free_end="${free_info##* }MiB"
+        fi
+
+        if [[ -z "${free_start}" || "${free_start}" == "0MiB" ]]; then
+            die "No free space found on ${disk} for Chimera partition"
+        fi
+
+        disk_plan_add "Create root partition in free space (${free_start} — ${free_end})" \
+            parted -s "${disk}" mkpart "Linux filesystem" ext4 "${free_start}" "${free_end}"
+
+        # Determine new partition's device name
         local part_prefix="${disk}"
         [[ "${disk}" =~ [0-9]$ ]] && part_prefix="${disk}p"
-        ROOT_PARTITION="${part_prefix}${part_count}"
+        local next_part_num
+        next_part_num=$(( $(parted -s "${disk}" print 2>/dev/null | grep -c '^ *[0-9]') + 1 )) || true
+        ROOT_PARTITION="${part_prefix}${next_part_num}"
+    fi
+
+    # LUKS encryption
+    if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
+        LUKS_PARTITION="${ROOT_PARTITION}"
+        disk_plan_add "Setup LUKS encryption on ${ROOT_PARTITION}" \
+            cryptsetup luksFormat --batch-mode "${ROOT_PARTITION}"
+        disk_plan_add "Open LUKS partition" \
+            cryptsetup luksOpen "${ROOT_PARTITION}" cryptroot
+        ROOT_PARTITION="/dev/mapper/cryptroot"
     fi
 
     case "${fs}" in
@@ -151,7 +193,7 @@ disk_plan_dualboot() {
             ;;
     esac
 
-    export ROOT_PARTITION
+    export ROOT_PARTITION LUKS_PARTITION
     einfo "Dual-boot plan generated"
 }
 

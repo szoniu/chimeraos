@@ -80,6 +80,28 @@ generate_fstab() {
     einfo "fstab generated"
 }
 
+# --- crypttab ---
+
+generate_crypttab() {
+    if [[ "${LUKS_ENABLED:-no}" != "yes" ]]; then
+        return 0
+    fi
+
+    einfo "Generating /etc/crypttab..."
+
+    local luks_uuid
+    luks_uuid=$(get_uuid "${LUKS_PARTITION}")
+
+    if [[ -z "${luks_uuid}" ]]; then
+        eerror "Cannot determine UUID for LUKS partition ${LUKS_PARTITION}"
+        return 1
+    fi
+
+    echo "cryptroot UUID=${luks_uuid} none luks" > "${MOUNTPOINT}/etc/crypttab"
+
+    einfo "crypttab generated for ${LUKS_PARTITION} (UUID=${luks_uuid})"
+}
+
 _generate_fstab_manual() {
     local fstab="${MOUNTPOINT}/etc/fstab"
     local fs="${FILESYSTEM:-ext4}"
@@ -257,9 +279,9 @@ system_finalize() {
     # Set correct date/time inside chroot if possible
     chroot_exec "hwclock --systohc" 2>/dev/null || true
 
-    # Clean up
-    rm -rf "${MOUNTPOINT}${CHECKPOINT_DIR}" 2>/dev/null || true
-    rm -f "${MOUNTPOINT}${CONFIG_FILE}" 2>/dev/null || true
+    # Clean up installer artifacts from target disk
+    rm -rf "${MOUNTPOINT}${CHECKPOINT_DIR_SUFFIX}" 2>/dev/null || true
+    rm -f "${MOUNTPOINT}/tmp/$(basename "${CONFIG_FILE}")" 2>/dev/null || true
 
     einfo "System finalization complete"
 }

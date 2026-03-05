@@ -64,6 +64,9 @@ source "${DATA_DIR}/gpu_database.sh"
 cleanup() {
     local rc=$?
 
+    # Restore terminal echo (gum backend disables it)
+    stty echo 2>/dev/null || true
+
     # Restore stderr if it was redirected to log file (fd 4 saved by screen_progress)
     if { true >&4; } 2>/dev/null; then
         exec 2>&4
@@ -71,10 +74,18 @@ cleanup() {
     fi
 
     if mountpoint -q "${MOUNTPOINT}/proc" 2>/dev/null; then
-        ewarn "Cleaning up mount points..."
+        ewarn "Cleaning up chroot mount points..."
         chroot_teardown || true
     fi
+
+    # Unmount filesystems and close LUKS on failure
     if [[ ${rc} -ne 0 ]]; then
+        if mountpoint -q "${MOUNTPOINT}" 2>/dev/null; then
+            ewarn "Cleaning up filesystems..."
+            unmount_filesystems || true
+        elif [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
+            cryptsetup luksClose cryptroot 2>/dev/null || true
+        fi
         eerror "Installer exited with code ${rc}"
         eerror "Log file: ${LOG_FILE}"
     fi

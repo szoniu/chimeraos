@@ -29,18 +29,20 @@ _install_grub() {
 
     # Configure GRUB for LUKS if needed
     if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
-        local luks_uuid
-        luks_uuid=$(get_uuid "${LUKS_PARTITION}")
+        # Regenerate initramfs with LUKS support (crypttab written in fstab phase)
+        try "Regenerating initramfs with LUKS support" \
+            chroot_exec "update-initramfs -c -k all"
+
         chroot_exec "cat >> /etc/default/grub << 'GRUBEOF'
 
 # LUKS encryption support
-GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=${luks_uuid}:cryptroot root=/dev/mapper/cryptroot\"
+GRUB_CMDLINE_LINUX=\"root=/dev/mapper/cryptroot\"
 GRUB_ENABLE_CRYPTODISK=y
 GRUBEOF"
     fi
 
     # Enable os-prober for dual-boot
-    if [[ "${WINDOWS_DETECTED:-0}" == "1" ]]; then
+    if [[ "${PARTITION_SCHEME:-}" == "dual-boot" ]]; then
         apk_install_if_available "os-prober"
         chroot_exec "echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub" || true
     fi
@@ -66,12 +68,12 @@ _install_systemd_boot() {
     try "Generating boot entries" \
         chroot_exec "gen-systemd-boot"
 
-    # LUKS support via kernel cmdline
+    # LUKS support: regenerate initramfs with crypttab, regenerate boot entries
     if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
-        local luks_uuid
-        luks_uuid=$(get_uuid "${LUKS_PARTITION}")
-        ewarn "LUKS with systemd-boot: you may need to add kernel parameters manually"
-        ewarn "cryptdevice=UUID=${luks_uuid}:cryptroot root=/dev/mapper/cryptroot"
+        try "Regenerating initramfs with LUKS support" \
+            chroot_exec "update-initramfs -c -k all"
+        try "Regenerating boot entries with LUKS" \
+            chroot_exec "gen-systemd-boot"
     fi
 
     einfo "systemd-boot installed"

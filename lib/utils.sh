@@ -623,13 +623,25 @@ _infer_from_timezone() {
     fi
 }
 
-# _infer_from_keymap — Read keymap from vconsole.conf
+# _infer_from_keymap — Read keymap from /etc/default/keyboard or vconsole.conf
 _infer_from_keymap() {
     local mp="$1"
 
+    # Chimera uses console-setup (/etc/default/keyboard)
+    if [[ -f "${mp}/etc/default/keyboard" ]]; then
+        local km
+        km=$(sed -n 's/^XKBLAYOUT="\{0,1\}\([^"]*\)"\{0,1\}/\1/p' "${mp}/etc/default/keyboard" | head -1) || true
+        if [[ -n "${km}" ]]; then
+            KEYMAP="${km}"
+            export KEYMAP
+            return 0
+        fi
+    fi
+
+    # Fallback: vconsole.conf (other distros)
     if [[ -f "${mp}/etc/vconsole.conf" ]]; then
         local km
-        km=$(sed -n "s/^KEYMAP=[\"']*\([^\"']*\).*/\1/p; T; q" "${mp}/etc/vconsole.conf") || true
+        km=$(sed -n "s/^KEYMAP=[\"']*\([^\"']*\).*/\1/p" "${mp}/etc/vconsole.conf" | head -1) || true
         if [[ -n "${km}" ]]; then
             KEYMAP="${km}"
             export KEYMAP

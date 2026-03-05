@@ -230,6 +230,7 @@ _execute_phase() {
             ;;
         fstab)
             generate_fstab
+            generate_crypttab
             ;;
         system_config)
             system_set_timezone
@@ -253,6 +254,10 @@ _execute_phase() {
             ;;
         extras)
             install_extra_packages
+            install_fingerprint_tools
+            install_thunderbolt_tools
+            install_sensor_tools
+            install_wwan_tools
             ;;
         finalize)
             system_finalize
