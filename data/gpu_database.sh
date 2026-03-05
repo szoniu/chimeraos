@@ -52,6 +52,26 @@ get_gpu_packages() {
     esac
 }
 
+# get_hybrid_gpu_recommendation — Return GPU packages for hybrid iGPU+dGPU setup
+# Usage: get_hybrid_gpu_recommendation "igpu_vendor" "dgpu_vendor"
+# Chimera Linux uses open-source drivers only
+get_hybrid_gpu_recommendation() {
+    local igpu="$1" dgpu="$2"
+    local pkgs=""
+
+    case "${igpu}" in
+        intel) pkgs="mesa mesa-dri vulkan-loader" ;;
+        amd)   pkgs="mesa mesa-dri vulkan-loader firmware-linux-amdgpu" ;;
+    esac
+
+    case "${dgpu}" in
+        nvidia) pkgs+=" firmware-linux-nvidia" ;;
+        amd)    pkgs+=" firmware-linux-amdgpu" ;;
+    esac
+
+    echo "${pkgs}"
+}
+
 # get_microcode_package — Return CPU microcode package name
 # Usage: get_microcode_package "cpu_vendor"
 get_microcode_package() {

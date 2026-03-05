@@ -18,6 +18,9 @@ desktop_install() {
     # PipeWire is typically included, but ensure it
     _install_pipewire
 
+    # Auto-install Bluetooth (like PipeWire — always with desktop)
+    _install_bluetooth
+
     # Install KDE applications
     _install_kde_apps
 
@@ -42,20 +45,26 @@ _install_gpu_drivers() {
     # Always install mesa base
     apk_install "Installing Mesa" mesa mesa-dri
 
-    case "${vendor}" in
-        nvidia)
-            _install_nvidia_open
-            ;;
-        amd)
-            _install_amd_drivers
-            ;;
-        intel)
-            _install_intel_drivers
-            ;;
-        *)
-            einfo "No specific GPU driver to install"
-            ;;
-    esac
+    if [[ "${HYBRID_GPU:-no}" == "yes" ]]; then
+        # Hybrid GPU — install drivers for both iGPU and dGPU
+        einfo "Hybrid GPU setup: ${IGPU_VENDOR:-?} iGPU + ${DGPU_VENDOR:-?} dGPU"
+
+        case "${IGPU_VENDOR:-}" in
+            amd) _install_amd_drivers ;;
+            intel) _install_intel_drivers ;;
+        esac
+        case "${DGPU_VENDOR:-}" in
+            nvidia) _install_nvidia_open ;;
+            amd) _install_amd_drivers ;;
+        esac
+    else
+        case "${vendor}" in
+            nvidia) _install_nvidia_open ;;
+            amd)    _install_amd_drivers ;;
+            intel)  _install_intel_drivers ;;
+            *)      einfo "No specific GPU driver to install" ;;
+        esac
+    fi
 
     # Vulkan support
     apk_install "Installing Vulkan loader" vulkan-loader
@@ -165,7 +174,29 @@ SDDMEOF"
     einfo "Plasma defaults configured"
 }
 
-# _install_extras — Install optional extras (Flatpak, printing, Bluetooth)
+# _install_bluetooth — Auto-install Bluetooth support if hardware detected
+_install_bluetooth() {
+    if [[ "${BLUETOOTH_DETECTED:-0}" == "1" ]] || [[ "${ENABLE_BLUETOOTH:-no}" == "yes" ]]; then
+        einfo "Installing Bluetooth support..."
+        apk_install "Installing Bluetooth" bluez
+        try "Enabling Bluetooth" \
+            chroot_exec "dinitctl -o enable bluetoothd" 2>/dev/null || true
+        ENABLE_BLUETOOTH="yes"
+        export ENABLE_BLUETOOTH
+    fi
+}
+
+# _install_printing — Auto-install printing support
+_install_printing() {
+    if [[ "${ENABLE_PRINTING:-no}" == "yes" ]]; then
+        einfo "Installing printing support..."
+        apk_install "Installing CUPS" cups cups-filters
+        try "Enabling CUPS" \
+            chroot_exec "dinitctl -o enable cupsd" 2>/dev/null || true
+    fi
+}
+
+# _install_extras — Install optional extras (Flatpak, printing)
 _install_extras() {
     if [[ "${ENABLE_FLATPAK:-no}" == "yes" ]]; then
         einfo "Installing Flatpak..."
@@ -173,19 +204,7 @@ _install_extras() {
         chroot_exec "flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo" 2>/dev/null || true
     fi
 
-    if [[ "${ENABLE_PRINTING:-no}" == "yes" ]]; then
-        einfo "Installing printing support..."
-        apk_install "Installing CUPS" cups cups-filters
-        try "Enabling CUPS" \
-            chroot_exec "dinitctl -o enable cupsd" 2>/dev/null || true
-    fi
-
-    if [[ "${ENABLE_BLUETOOTH:-no}" == "yes" ]]; then
-        einfo "Installing Bluetooth support..."
-        apk_install "Installing Bluetooth" bluez
-        try "Enabling Bluetooth" \
-            chroot_exec "dinitctl -o enable bluetoothd" 2>/dev/null || true
-    fi
+    _install_printing
 }
 
 # install_extra_packages — Install user-specified extra packages

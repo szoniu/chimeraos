@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
-# tui/summary.sh — Full summary + confirmation + countdown
+# tui/summary.sh — Full summary + confirmation + countdown for Chimera Linux
 source "${LIB_DIR}/protection.sh"
 
 screen_summary() {
+    # Validate configuration before showing summary
+    local validation_errors
+    validation_errors=$(validate_config) || {
+        dialog_msgbox "Configuration Errors" \
+            "Fix these issues before proceeding:\n\n${validation_errors}"
+        return "${TUI_BACK}"
+    }
+
     local summary=""
     summary+="=== Installation Summary ===\n\n"
     summary+="Target disk:  ${TARGET_DISK:-?}\n"
@@ -20,7 +28,17 @@ screen_summary() {
     summary+="\n"
     summary+="Bootloader:   ${BOOTLOADER_TYPE:-grub}\n"
     summary+="Kernel:       linux-${KERNEL_TYPE:-lts}\n"
-    summary+="GPU:          ${GPU_VENDOR:-unknown} (${GPU_DRIVER:-mesa}, open-source)\n"
+    if [[ "${HYBRID_GPU:-no}" == "yes" ]]; then
+        summary+="GPU:          ${IGPU_VENDOR:-?} + ${DGPU_DEVICE_NAME:-?} (hybrid, open-source)\n"
+    else
+        summary+="GPU:          ${GPU_VENDOR:-unknown} (${GPU_DRIVER:-mesa}, open-source)\n"
+    fi
+    [[ "${ASUS_ROG_DETECTED:-0}" == "1" ]] && summary+="ASUS ROG:     detected\n"
+    [[ "${ENABLE_ASUSCTL:-no}" == "yes" ]] && summary+="ROG tools:    asusctl enabled\n"
+    [[ "${ENABLE_FINGERPRINT:-no}" == "yes" ]] && summary+="Fingerprint:  fprintd enabled\n"
+    [[ "${ENABLE_THUNDERBOLT:-no}" == "yes" ]] && summary+="Thunderbolt:  bolt enabled\n"
+    [[ "${ENABLE_SENSORS:-no}" == "yes" ]] && summary+="IIO sensors:  iio-sensor-proxy enabled\n"
+    [[ "${ENABLE_WWAN:-no}" == "yes" ]] && summary+="WWAN LTE:     ModemManager enabled\n"
     summary+="\n"
     summary+="Username:     ${USERNAME:-user}\n"
     summary+="SSH:          ${ENABLE_SSH:-no}\n"
@@ -31,8 +49,21 @@ screen_summary() {
     [[ "${ENABLE_BLUETOOTH:-no}" == "yes" ]] && summary+="Bluetooth:    yes\n"
     [[ -n "${EXTRA_PACKAGES:-}" ]] && summary+="Extra pkgs:   ${EXTRA_PACKAGES}\n"
 
+    if [[ -n "${SHRINK_PARTITION:-}" ]]; then
+        summary+="Shrink:       ${SHRINK_PARTITION} (${SHRINK_PARTITION_FSTYPE:-?}) -> ${SHRINK_NEW_SIZE_MIB:-?} MiB\n"
+    fi
+
     if [[ "${ESP_REUSE:-no}" == "yes" ]]; then
         summary+="\nDual-boot:    YES (reusing ESP ${ESP_PARTITION:-?})\n"
+    fi
+
+    # Show detected operating systems
+    if [[ ${#DETECTED_OSES[@]} -gt 0 ]]; then
+        summary+="\nDetected OSes:\n"
+        local p
+        for p in "${!DETECTED_OSES[@]}"; do
+            summary+="  ${p}: ${DETECTED_OSES[${p}]}\n"
+        done
     fi
 
     dialog_msgbox "Installation Summary" "${summary}" || return "${TUI_BACK}"
@@ -51,6 +82,45 @@ screen_summary() {
 
         local confirmation
         confirmation=$(dialog_inputbox "Confirm Installation" \
+            "Type YES (all caps) to confirm and begin installation:" \
+            "") || return "${TUI_BACK}"
+
+        if [[ "${confirmation}" != "YES" ]]; then
+            dialog_msgbox "Cancelled" "Installation cancelled. You typed: '${confirmation}'"
+            return "${TUI_BACK}"
+        fi
+    elif [[ "${PARTITION_SCHEME:-auto}" == "dual-boot" ]]; then
+        local warning=""
+        warning+="!!! DUAL-BOOT INSTALLATION !!!\n\n"
+
+        # What WILL be formatted
+        warning+="WILL BE FORMATTED (data destroyed):\n"
+        if [[ -n "${ROOT_PARTITION:-}" ]]; then
+            warning+="  ${ROOT_PARTITION} -> ${FILESYSTEM:-ext4}\n"
+        else
+            warning+="  (new partition will be created) -> ${FILESYSTEM:-ext4}\n"
+        fi
+        if [[ -n "${SHRINK_PARTITION:-}" ]]; then
+            warning+="WILL BE SHRUNK (data preserved):\n"
+            warning+="  ${SHRINK_PARTITION} (${SHRINK_PARTITION_FSTYPE:-?}) -> ${SHRINK_NEW_SIZE_MIB:-?} MiB\n"
+        fi
+        warning+="\n"
+
+        # What will SURVIVE
+        warning+="WILL BE PRESERVED:\n"
+        warning+="  ${ESP_PARTITION:-?}: EFI System Partition\n"
+        local p
+        for p in "${!DETECTED_OSES[@]}"; do
+            [[ "${p}" == "${ROOT_PARTITION:-}" ]] && continue
+            warning+="  ${p}: ${DETECTED_OSES[${p}]}\n"
+        done
+
+        warning+="\nType 'YES' in the next dialog to confirm."
+
+        dialog_msgbox "WARNING" "${warning}" || return "${TUI_BACK}"
+
+        local confirmation
+        confirmation=$(dialog_inputbox "Confirm Dual-Boot Installation" \
             "Type YES (all caps) to confirm and begin installation:" \
             "") || return "${TUI_BACK}"
 

@@ -130,7 +130,7 @@ doas apk add pakiet
 |---|-------|-------------------|
 | 1 | Welcome | Sprawdzenie wymagan (root, UEFI, siec, chimera-bootstrap) |
 | 2 | Preset | Opcjonalne zaladowanie gotowej konfiguracji |
-| 3 | Hardware | Podglad wykrytego CPU, GPU, dyskow, Windows |
+| 3 | Hardware | Podglad wykrytego CPU, GPU (hybrid), dyskow, peryferiow, Windows/Linux |
 | 4 | Dysk | Wybor dysku + schemat (auto/dual-boot/manual) |
 | 5 | Filesystem | ext4 / btrfs / XFS + opcjonalne LUKS szyfrowanie |
 | 6 | Swap | zram / partycja / brak |
@@ -141,7 +141,7 @@ doas apk add pakiet
 | 11 | GPU | AMD (RADV) / Intel (ANV) / NVIDIA (NVK, open-source) |
 | 12 | Desktop | KDE Plasma 6 + aplikacje + Flatpak/drukowanie/Bluetooth |
 | 13 | Uzytkownicy | Root, user, grupy, SSH |
-| 14 | Pakiety | Dodatkowe pakiety apk |
+| 14 | Pakiety | Dodatkowe pakiety apk + opcje sprzetowe (fingerprint, Thunderbolt, itp.) |
 | 15 | Preset save | Eksport konfiguracji |
 | 16 | Podsumowanie | Przeglad + potwierdzenie YES + countdown |
 
@@ -153,11 +153,13 @@ Po potwierdzeniu installer:
 5. Konfiguruje system (timezone, hostname, uzytkownicy)
 6. Wlacza uslugi dinit (SDDM, NetworkManager, etc.)
 
-## Dual-boot z Windows
+## Dual-boot z Windows/Linux
 
-- Auto-wykrywanie ESP z Windows Boot Manager
+- Auto-wykrywanie ESP z Windows Boot Manager i innych Linuksow
 - ESP nigdy nie jest formatowany przy reuse
 - GRUB + os-prober automatycznie widzi Windows
+- Wizard do zmniejszania partycji jesli brak wolnego miejsca (NTFS, ext4, btrfs)
+- Ostrzezenia o istniejacych OS-ach na wybranych partycjach
 
 ## Presety
 
@@ -244,9 +246,12 @@ Na maszynach z mala iloscia RAM (<8 GB) kompilacja duzych pakietow moze powodowa
 ## Testy
 
 ```bash
-bash tests/test_config.sh          # Config round-trip (16 assertions)
-bash tests/test_disk.sh            # Disk planning (9 assertions)
-bash tests/test_infer_config.sh    # Config inference from installed system (38 assertions)
+bash tests/test_config.sh          # Config round-trip
+bash tests/test_disk.sh            # Disk planning
+bash tests/test_infer_config.sh    # Config inference from installed system
+bash tests/test_hybrid_gpu.sh      # Hybrid GPU + recommendation
+bash tests/test_validate.sh        # Config validation before install
+bash tests/test_peripherals.sh     # Peripheral detection + config vars
 bash tests/shellcheck.sh           # Lint
 ```
 
