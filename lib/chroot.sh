@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# chroot.sh — chimera-chroot wrapper, bind mounts, cleanup
+# chroot.sh — Manual bind mounts + plain chroot (no chimera-chroot)
+# chimera-chroot auto-unmounts pseudo-FS on each call, which causes
+# mount state loss during multi-step installation. Use manual mounts instead.
 source "${LIB_DIR}/protection.sh"
 
-# chroot_setup — Prepare chroot environment
-# chimera-chroot handles bind mounts automatically, but we also support manual
+# chroot_setup — Prepare chroot environment with persistent bind mounts
 chroot_setup() {
     einfo "Setting up chroot environment..."
 
@@ -12,25 +13,32 @@ chroot_setup() {
         return 0
     fi
 
-    # If chimera-chroot is available, it handles pseudo-filesystems
-    # For manual setup (when calling chroot directly):
-    if ! command -v chimera-chroot &>/dev/null; then
-        # Manual bind mounts
-        if ! mountpoint -q "${MOUNTPOINT}/proc" 2>/dev/null; then
-            try "Mounting /proc" mount --types proc /proc "${MOUNTPOINT}/proc"
-        fi
-        if ! mountpoint -q "${MOUNTPOINT}/sys" 2>/dev/null; then
-            try "Mounting /sys" mount --rbind /sys "${MOUNTPOINT}/sys"
-            mount --make-rslave "${MOUNTPOINT}/sys"
-        fi
-        if ! mountpoint -q "${MOUNTPOINT}/dev" 2>/dev/null; then
-            try "Mounting /dev" mount --rbind /dev "${MOUNTPOINT}/dev"
-            mount --make-rslave "${MOUNTPOINT}/dev"
-        fi
-        if ! mountpoint -q "${MOUNTPOINT}/run" 2>/dev/null; then
-            try "Mounting /run" mount --bind /run "${MOUNTPOINT}/run"
-            mount --make-slave "${MOUNTPOINT}/run"
-        fi
+    if ! mountpoint -q "${MOUNTPOINT}" 2>/dev/null; then
+        ewarn "Filesystem not mounted at ${MOUNTPOINT} — skipping chroot setup"
+        return 0
+    fi
+
+    # Clean up stale mounts from a previous session (crash + resume)
+    chroot_teardown 2>/dev/null || true
+
+    # Ensure mount directories exist
+    mkdir -p "${MOUNTPOINT}"/{proc,sys,dev,run}
+
+    # Bind mount pseudo-filesystems
+    if ! mountpoint -q "${MOUNTPOINT}/proc" 2>/dev/null; then
+        try "Mounting /proc" mount --types proc /proc "${MOUNTPOINT}/proc"
+    fi
+    if ! mountpoint -q "${MOUNTPOINT}/sys" 2>/dev/null; then
+        try "Mounting /sys" mount --rbind /sys "${MOUNTPOINT}/sys"
+        mount --make-rslave "${MOUNTPOINT}/sys"
+    fi
+    if ! mountpoint -q "${MOUNTPOINT}/dev" 2>/dev/null; then
+        try "Mounting /dev" mount --rbind /dev "${MOUNTPOINT}/dev"
+        mount --make-rslave "${MOUNTPOINT}/dev"
+    fi
+    if ! mountpoint -q "${MOUNTPOINT}/run" 2>/dev/null; then
+        try "Mounting /run" mount --bind /run "${MOUNTPOINT}/run"
+        mount --make-slave "${MOUNTPOINT}/run"
     fi
 
     # Copy DNS configuration
@@ -48,20 +56,14 @@ chroot_teardown() {
         return 0
     fi
 
-    local -a chroot_mounts=(
-        "${MOUNTPOINT}/run"
-        "${MOUNTPOINT}/dev/shm"
-        "${MOUNTPOINT}/dev/pts"
-        "${MOUNTPOINT}/dev"
-        "${MOUNTPOINT}/sys"
-        "${MOUNTPOINT}/proc"
-    )
+    # Unmount all pseudo-FS mounts under MOUNTPOINT in reverse order
+    local -a mounts
+    readarray -t mounts < <(awk -v mp="${MOUNTPOINT}" '$2 ~ "^"mp"/(proc|sys|dev|run)" {print $2}' /proc/mounts 2>/dev/null | sort -r)
 
     local mnt
-    for mnt in "${chroot_mounts[@]}"; do
-        if mountpoint -q "${mnt}" 2>/dev/null; then
-            umount -l "${mnt}" 2>/dev/null || true
-        fi
+    for mnt in "${mounts[@]}"; do
+        [[ -z "${mnt}" ]] && continue
+        umount -l "${mnt}" 2>/dev/null || true
     done
 
     einfo "Chroot teardown complete"
@@ -78,12 +80,7 @@ chroot_exec() {
     local env_prefix=""
     [[ "${LIVE_OUTPUT:-0}" == "1" ]] && env_prefix="LIVE_OUTPUT=1 "
 
-    if command -v chimera-chroot &>/dev/null; then
-        # chimera-chroot auto-mounts pseudo-filesystems
-        chimera-chroot "${MOUNTPOINT}" /bin/sh -c "${env_prefix}$*"
-    else
-        chroot "${MOUNTPOINT}" /bin/sh -c "${env_prefix}$*"
-    fi
+    chroot "${MOUNTPOINT}" /bin/sh -c "${env_prefix}$*"
 }
 
 # copy_dns_info — Copy DNS resolver config to chroot
