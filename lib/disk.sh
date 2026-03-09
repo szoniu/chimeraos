@@ -444,12 +444,25 @@ mount_filesystems() {
     fi
 
     # Open LUKS container if needed (e.g. after retry or resume)
+    # Detect LUKS by: explicit flag, or ROOT_PARTITION is crypto_LUKS type
+    local _luks_part=""
     if [[ "${LUKS_ENABLED:-no}" == "yes" && -n "${LUKS_PARTITION:-}" ]]; then
-        if [[ ! -b /dev/mapper/cryptroot ]]; then
-            einfo "Opening LUKS container on ${LUKS_PARTITION}..."
-            try "Open LUKS partition" \
-                cryptsetup luksOpen "${LUKS_PARTITION}" cryptroot
-        fi
+        _luks_part="${LUKS_PARTITION}"
+    elif [[ -b "${ROOT_PARTITION:-}" ]] && \
+         [[ "$(blkid -s TYPE -o value "${ROOT_PARTITION}" 2>/dev/null)" == "crypto_LUKS" ]]; then
+        _luks_part="${ROOT_PARTITION}"
+        LUKS_ENABLED="yes"
+        LUKS_PARTITION="${ROOT_PARTITION}"
+        export LUKS_ENABLED LUKS_PARTITION
+    fi
+
+    if [[ -n "${_luks_part}" && ! -b /dev/mapper/cryptroot ]]; then
+        einfo "Opening LUKS container on ${_luks_part}..."
+        try "Open LUKS partition" \
+            cryptsetup luksOpen "${_luks_part}" cryptroot
+    fi
+
+    if [[ -n "${_luks_part}" ]]; then
         ROOT_PARTITION="/dev/mapper/cryptroot"
         export ROOT_PARTITION
     fi
