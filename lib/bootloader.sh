@@ -30,16 +30,17 @@ _install_grub() {
         try "Mounting ESP" mount "${ESP_PARTITION}" "${MOUNTPOINT}${efi_dir}"
     fi
 
-    # Install GRUB to ESP
-    try "Installing GRUB to ${efi_dir}" \
-        chroot_exec "grub-install --efi-directory=${efi_dir}"
+    # Configure /etc/default/grub BEFORE grub-install (LUKS requires CRYPTODISK=y at install time)
+    chroot_exec "mkdir -p /etc/default"
+    chroot_exec "cat > /etc/default/grub << 'GRUBEOF'
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_TIMEOUT_STYLE=menu
+GRUB_DISTRIBUTOR=\"Chimera\"
+GRUB_CMDLINE_LINUX_DEFAULT=\"quiet\"
+GRUBEOF"
 
-    # Configure GRUB for LUKS if needed
     if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
-        # Regenerate initramfs with LUKS support (crypttab written in fstab phase)
-        try "Regenerating initramfs with LUKS support" \
-            chroot_exec "update-initramfs -c -k all"
-
         chroot_exec "cat >> /etc/default/grub << 'GRUBEOF'
 
 # LUKS encryption support
@@ -48,10 +49,19 @@ GRUB_ENABLE_CRYPTODISK=y
 GRUBEOF"
     fi
 
-    # Enable os-prober for dual-boot
     if [[ "${PARTITION_SCHEME:-}" == "dual-boot" ]]; then
-        apk_install_if_available "os-prober"
+        apk_install_if_available os-prober
         chroot_exec "echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub" || true
+    fi
+
+    # Install GRUB to ESP with unique bootloader-id (avoid overwriting other OS entries)
+    try "Installing GRUB to ${efi_dir}" \
+        chroot_exec "grub-install --efi-directory=${efi_dir} --bootloader-id=chimera"
+
+    # Regenerate initramfs with LUKS support if needed (crypttab written in fstab phase)
+    if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
+        try "Regenerating initramfs with LUKS support" \
+            chroot_exec "update-initramfs -c -k all"
     fi
 
     # Generate GRUB config
