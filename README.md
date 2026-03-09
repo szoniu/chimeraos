@@ -27,6 +27,8 @@ Na Windows: [Rufus](https://rufus.ie) lub [balenaEtcher](https://etcher.balena.i
 - BIOS/UEFI: F2, F12, lub Del przy starcie
 - **Wylacz Secure Boot**
 - Boot z USB w trybie **UEFI**
+- Login: `anon`, haslo: `chimera`
+- Root: `doas -s` (po zalogowaniu)
 
 ### 3. Polacz sie z internetem
 
