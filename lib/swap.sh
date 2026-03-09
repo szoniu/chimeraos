@@ -37,7 +37,7 @@ swap_setup_zram() {
 type = scripted
 command = /bin/sh -c 'modprobe zram && echo zstd > /sys/block/zram0/comp_algorithm && echo ${zram_size_kb}K > /sys/block/zram0/disksize && mkswap /dev/zram0 && swapon -p 100 /dev/zram0'
 stop-command = /bin/sh -c 'swapoff /dev/zram0 2>/dev/null; echo 1 > /sys/block/zram0/reset 2>/dev/null'
-depends-on = boot.target
+depends-on = local.target
 DINITEOF"
     try "Enabling zram swap" \
         chroot_exec "dinitctl -o enable zram-swap"
