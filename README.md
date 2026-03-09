@@ -111,9 +111,12 @@ doas apk add pakiet
 ```bash
 ./install.sh                    # Pelna instalacja (wizard + install)
 ./install.sh --configure        # Tylko wizard (generuje config)
+./install.sh --install          # Tylko instalacja (wymaga configa)
 ./install.sh --config plik.conf --install   # Z gotowego configa
 ./install.sh --resume           # Wznowienie przerwanej instalacji
 ./install.sh --dry-run          # Symulacja bez dotykania dyskow
+./install.sh --force            # Kontynuuj mimo bledow prerequisite
+./install.sh --non-interactive  # Abort zamiast recovery menu
 ```
 
 ## Wymagania
@@ -246,12 +249,11 @@ Na maszynach z mala iloscia RAM (<8 GB) kompilacja duzych pakietow moze powodowa
 ## Testy
 
 ```bash
-bash tests/test_config.sh          # Config round-trip
-bash tests/test_disk.sh            # Disk planning
-bash tests/test_infer_config.sh    # Config inference from installed system
-bash tests/test_hybrid_gpu.sh      # Hybrid GPU + recommendation
-bash tests/test_validate.sh        # Config validation before install
-bash tests/test_peripherals.sh     # Peripheral detection + config vars
+bash tests/test_config.sh          # Config round-trip (16 assertions)
+bash tests/test_disk.sh            # Disk planning (9 assertions)
+bash tests/test_infer_config.sh    # Config inference from installed system (38 assertions)
+bash tests/test_shrink.sh          # Partition shrink planning (33 assertions)
+bash tests/test_multiboot.sh       # Multi-boot OS detection + serialization (26 assertions)
 bash tests/shellcheck.sh           # Lint
 ```
 
@@ -262,7 +264,7 @@ install.sh              — Entry point
 configure.sh            — Wrapper: tylko wizard
 lib/                    — Moduly (constants, logging, dialog, hardware, disk, bootstrap...)
 tui/                    — 16 ekranow TUI
-data/                   — GPU database, dialogrc theme
+data/                   — GPU database, dialogrc theme, gum binary cache
 presets/                — Gotowe presety
 hooks/                  — before/after hooks
 tests/                  — Testy
