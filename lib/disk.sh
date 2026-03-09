@@ -351,7 +351,7 @@ cleanup_target_disk() {
         return 0
     fi
 
-    einfo "Cleaning up ${disk} (unmounting partitions, deactivating swap)..."
+    einfo "Cleaning up ${disk} (unmounting partitions, deactivating swap, closing LUKS)..."
 
     # Deactivate any swap partitions on this disk
     local swap_part
@@ -360,20 +360,39 @@ cleanup_target_disk() {
         swapoff "${swap_part}" 2>/dev/null && einfo "Deactivated swap: ${swap_part}" || true
     done < <(awk -v disk="${disk}" 'NR>1 && $1 ~ "^"disk"[p]?[0-9]" {print $1}' /proc/swaps 2>/dev/null)
 
-    # Unmount /dev/mapper/* (LUKS containers) before unmounting raw partitions
+    # Unmount ALL mounts under MOUNTPOINT first (chroot bind mounts, ESP, subvols)
+    local -a all_mounts
+    readarray -t all_mounts < <(awk -v mp="${MOUNTPOINT}" '$2 == mp || $2 ~ "^"mp"/" {print $2}' /proc/mounts 2>/dev/null | sort -r)
+    local m
+    for m in "${all_mounts[@]}"; do
+        [[ -z "${m}" ]] && continue
+        umount "${m}" 2>/dev/null || umount -l "${m}" 2>/dev/null || true
+        einfo "Unmounted: ${m}"
+    done
+
+    # Close LUKS containers
     if [[ -b /dev/mapper/cryptroot ]]; then
-        umount -l /dev/mapper/cryptroot 2>/dev/null && einfo "Unmounted: /dev/mapper/cryptroot" || true
+        # Kill any processes still using the mapper device
+        fuser -km /dev/mapper/cryptroot 2>/dev/null || true
+        sleep 1
+        umount /dev/mapper/cryptroot 2>/dev/null || true
         cryptsetup luksClose cryptroot 2>/dev/null && einfo "Closed LUKS: cryptroot" || true
+        # Retry if still open
+        if [[ -b /dev/mapper/cryptroot ]]; then
+            sleep 2
+            cryptsetup luksClose cryptroot 2>/dev/null && einfo "Closed LUKS: cryptroot (retry)" || \
+                ewarn "Could not close LUKS container — may need manual intervention"
+        fi
     fi
 
-    # Unmount all partitions on this disk (reverse order for nested mounts)
+    # Unmount raw partitions on this disk
     local -a mounts
     readarray -t mounts < <(awk -v disk="${disk}" '$1 ~ "^"disk"[p]?[0-9]" {print $2}' /proc/mounts 2>/dev/null | sort -r)
-
     local mnt
     for mnt in "${mounts[@]}"; do
         [[ -z "${mnt}" ]] && continue
-        umount -l "${mnt}" 2>/dev/null && einfo "Unmounted: ${mnt}" || true
+        umount "${mnt}" 2>/dev/null || umount -l "${mnt}" 2>/dev/null || true
+        einfo "Unmounted: ${mnt}"
     done
 
     einfo "Cleanup of ${disk} complete"
