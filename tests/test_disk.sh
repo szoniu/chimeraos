@@ -50,7 +50,7 @@ LUKS_ENABLED="no"
 export TARGET_DISK FILESYSTEM SWAP_TYPE LUKS_ENABLED
 
 disk_plan_auto
-assert_eq "Action count (ext4+zram)" "6" "${#DISK_ACTIONS[@]}"
+assert_eq "Action count (ext4+zram)" "3" "${#DISK_ACTIONS[@]}"
 assert_eq "ESP partition" "/dev/sda1" "${ESP_PARTITION}"
 assert_eq "Root partition" "/dev/sda2" "${ROOT_PARTITION}"
 

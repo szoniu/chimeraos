@@ -1,32 +1,56 @@
 #!/usr/bin/env bash
-# disk.sh — Two-phase disk operations (plan -> execute), LUKS, UUID persistence
+# disk.sh — Two-phase disk operations (plan -> execute), UUID persistence
+# Uses sfdisk (util-linux) for atomic GPT partitioning
 source "${LIB_DIR}/protection.sh"
 
 # Action queue for two-phase disk operations
 declare -ga DISK_ACTIONS=()
+declare -ga DISK_STDIN=()
 
 # --- Phase 1: Planning ---
 
+# disk_plan_reset — Clear the action queue
 disk_plan_reset() {
     DISK_ACTIONS=()
+    DISK_STDIN=()
 }
 
+# disk_plan_add — Add an action to the queue (no stdin)
+# Usage: disk_plan_add "description" command [args...]
 disk_plan_add() {
     local desc="$1"
     shift
-    DISK_ACTIONS+=("${desc}|||$*")
+    local cmd
+    cmd=$(printf '%q ' "$@")
+    DISK_ACTIONS+=("${desc}|||${cmd}")
+    DISK_STDIN+=("")
 }
 
+# disk_plan_add_stdin — Add an action with stdin data
+# Usage: disk_plan_add_stdin "description" "stdin_data" command [args...]
+disk_plan_add_stdin() {
+    local desc="$1" stdin="$2"
+    shift 2
+    local cmd
+    cmd=$(printf '%q ' "$@")
+    DISK_ACTIONS+=("${desc}|||${cmd}")
+    DISK_STDIN+=("${stdin}")
+}
+
+# disk_plan_show — Display planned actions
 disk_plan_show() {
     local i
     einfo "Planned disk operations:"
     for (( i = 0; i < ${#DISK_ACTIONS[@]}; i++ )); do
         local desc="${DISK_ACTIONS[$i]%%|||*}"
         einfo "  $((i + 1)). ${desc}"
+        if [[ -n "${DISK_STDIN[$i]:-}" ]]; then
+            elog "    stdin script: ${DISK_STDIN[$i]}"
+        fi
     done
 }
 
-# disk_plan_auto — Generate auto-partitioning plan
+# disk_plan_auto — Generate auto-partitioning plan using sfdisk
 disk_plan_auto() {
     local disk="${TARGET_DISK}"
     local fs="${FILESYSTEM:-ext4}"
@@ -35,28 +59,20 @@ disk_plan_auto() {
 
     disk_plan_reset
 
-    disk_plan_add "Create GPT partition table on ${disk}" \
-        parted -s "${disk}" mklabel gpt
+    # Build sfdisk script — single atomic operation for all partitions
+    local sfdisk_script="label: gpt"$'\n'
+    sfdisk_script+="start=1MiB, size=${ESP_SIZE_MIB}MiB, type=${GPT_TYPE_EFI}, name=ESP"$'\n'
 
-    # ESP partition (512 MiB)
-    disk_plan_add "Create ESP partition (${ESP_SIZE_MIB} MiB)" \
-        parted -s "${disk}" mkpart "EFI System Partition" fat32 1MiB "$((ESP_SIZE_MIB + 1))MiB"
-    disk_plan_add "Set ESP flag" \
-        parted -s "${disk}" set 1 esp on
-
-    local next_start="$((ESP_SIZE_MIB + 1))"
-
-    # Optional swap partition
     if [[ "${swap_type}" == "partition" ]]; then
-        local swap_end="$((next_start + swap_size))"
-        disk_plan_add "Create swap partition (${swap_size} MiB)" \
-            parted -s "${disk}" mkpart "Linux swap" linux-swap "${next_start}MiB" "${swap_end}MiB"
-        next_start="${swap_end}"
+        sfdisk_script+="size=${swap_size}MiB, type=${GPT_TYPE_SWAP}, name=swap"$'\n'
     fi
 
-    # Root partition (rest of disk)
-    disk_plan_add "Create root partition (remaining space)" \
-        parted -s "${disk}" mkpart "Linux filesystem" "${next_start}MiB" "100%"
+    # Root partition — no size= means remaining space
+    sfdisk_script+="type=${GPT_TYPE_LINUX}, name=linux"$'\n'
+
+    disk_plan_add_stdin "Create GPT partition table and partitions on ${disk}" \
+        "${sfdisk_script}" \
+        sfdisk --force --no-reread "${disk}"
 
     # Determine partition device names
     local part_prefix="${disk}"
@@ -82,8 +98,6 @@ disk_plan_auto() {
     # LUKS encryption
     if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
         LUKS_PARTITION="${ROOT_PARTITION}"
-        # Note: cryptsetup luksFormat reads passphrase from stdin interactively
-        # --batch-mode only suppresses confirmation, not the passphrase prompt
         disk_plan_add "Setup LUKS encryption on ${ROOT_PARTITION}" \
             cryptsetup luksFormat --batch-mode "${ROOT_PARTITION}"
         disk_plan_add "Open LUKS partition" \
@@ -118,53 +132,26 @@ disk_plan_dualboot() {
 
     disk_plan_reset
 
-    einfo "Reusing existing ESP: ${ESP_PARTITION}"
-
-    # Shrink existing partition if requested
+    # Shrink existing partition first if requested
     if [[ -n "${SHRINK_PARTITION:-}" ]]; then
         disk_plan_shrink
     fi
 
+    # ESP is reused, never formatted
+    einfo "Reusing existing ESP: ${ESP_PARTITION}"
+
     if [[ -z "${ROOT_PARTITION:-}" ]]; then
-        # Find free space for the new partition
-        local free_start="" free_end=""
+        # Need to create root partition in free space using sfdisk --append
+        disk_plan_add_stdin "Create root partition in free space" \
+            "type=${GPT_TYPE_LINUX}, name=linux"$'\n' \
+            sfdisk --append --force --no-reread "${disk}"
 
-        if [[ "${DRY_RUN:-0}" == "1" ]]; then
-            free_start="50%"
-            free_end="100%"
-        elif [[ -n "${SHRINK_PARTITION:-}" ]]; then
-            # After shrink, free space starts at partition start + new size
-            local shrink_part_num
-            shrink_part_num=$(echo "${SHRINK_PARTITION}" | sed 's/.*[^0-9]\([0-9]*\)$/\1/')
-            local part_line
-            part_line=$(parted -s "${disk}" unit MiB print 2>/dev/null \
-                | grep "^ *${shrink_part_num} " | head -1) || true
-            local part_start_mib orig_end_mib
-            part_start_mib=$(echo "${part_line}" | awk '{gsub(/MiB/,""); print int($2)}')
-            orig_end_mib=$(echo "${part_line}" | awk '{gsub(/MiB/,""); print int($3)}')
-            free_start="$(( part_start_mib + SHRINK_NEW_SIZE_MIB ))MiB"
-            free_end="${orig_end_mib}MiB"
-        else
-            # Find largest existing free region
-            local free_info
-            free_info=$(parted -s "${disk}" unit MiB print free 2>/dev/null \
-                | awk '/[Ff]ree [Ss]pace/ {gsub(/MiB/,""); s=int($3); if(s>m){m=s; a=$1; b=$2}} END{print a+0, b+0}')
-            free_start="${free_info%% *}MiB"
-            free_end="${free_info##* }MiB"
-        fi
-
-        if [[ -z "${free_start}" || "${free_start}" == "0MiB" ]]; then
-            die "No free space found on ${disk} for Chimera partition"
-        fi
-
-        disk_plan_add "Create root partition in free space (${free_start} — ${free_end})" \
-            parted -s "${disk}" mkpart "Linux filesystem" ext4 "${free_start}" "${free_end}"
-
-        # Determine new partition's device name
+        # Determine partition name: count existing partitions via sfdisk
+        local existing_count
+        existing_count=$(sfdisk --dump "${disk}" 2>/dev/null | grep -c "^${disk}") || existing_count=0
+        local next_part_num=$(( existing_count + 1 ))
         local part_prefix="${disk}"
         [[ "${disk}" =~ [0-9]$ ]] && part_prefix="${disk}p"
-        local next_part_num
-        next_part_num=$(( $(parted -s "${disk}" print 2>/dev/null | grep -c '^ *[0-9]') + 1 )) || true
         ROOT_PARTITION="${part_prefix}${next_part_num}"
     fi
 
@@ -178,6 +165,7 @@ disk_plan_dualboot() {
         ROOT_PARTITION="/dev/mapper/cryptroot"
     fi
 
+    # Format root
     case "${fs}" in
         ext4)
             disk_plan_add "Format root as ext4" \
@@ -199,7 +187,7 @@ disk_plan_dualboot() {
 
 # --- Shrink helpers ---
 
-# disk_get_free_space_mib — Calculate free space on a disk in MiB
+# disk_get_free_space_mib — Get total free (unallocated) space on disk in MiB
 disk_get_free_space_mib() {
     local disk="$1"
 
@@ -208,28 +196,19 @@ disk_get_free_space_mib() {
         return 0
     fi
 
-    # Use parted to find free space
-    local free_mib=0
-    local line
-    while IFS= read -r line; do
-        # parted print free outputs lines like: "10.5GB  20.0GB  9500MB  Free Space"
-        if echo "${line}" | grep -qi 'free space'; then
-            local size_str
-            size_str=$(echo "${line}" | awk '{print $(NF-1)}') || true
-            local size_val
-            size_val=$(echo "${size_str}" | sed 's/[^0-9.]//g') || true
-            if [[ -n "${size_val}" ]]; then
-                # Convert to MiB based on unit
-                if echo "${size_str}" | grep -qi 'GB'; then
-                    free_mib=$(( free_mib + ${size_val%%.*} * 1024 ))
-                elif echo "${size_str}" | grep -qi 'MB'; then
-                    free_mib=$(( free_mib + ${size_val%%.*} ))
-                fi
-            fi
-        fi
-    done < <(parted -s "${disk}" unit MiB print free 2>/dev/null || true)
+    local sectors sector_size total_free_sectors=0
+    sector_size=$(blockdev --getss "${disk}" 2>/dev/null) || sector_size=512
 
-    echo "${free_mib}"
+    while IFS= read -r line; do
+        # sfdisk --list-free outputs lines like: "Start    End Sectors Size"
+        local s
+        s=$(echo "${line}" | awk 'NF>=3 && $3 ~ /^[0-9]+$/ {print $3}') || true
+        if [[ -n "${s}" ]]; then
+            (( total_free_sectors += s )) || true
+        fi
+    done < <(sfdisk --list-free "${disk}" 2>/dev/null)
+
+    echo $(( total_free_sectors * sector_size / 1024 / 1024 ))
 }
 
 # disk_get_partition_size_mib — Get partition size in MiB
@@ -315,7 +294,7 @@ disk_can_shrink_fstype() {
 }
 
 # disk_plan_shrink — Add shrink actions to DISK_ACTIONS[]
-# Uses parted resizepart (Chimera uses parted, not sfdisk)
+# Requires: SHRINK_PARTITION, SHRINK_PARTITION_FSTYPE, SHRINK_NEW_SIZE_MIB
 disk_plan_shrink() {
     local part="${SHRINK_PARTITION}"
     local fstype="${SHRINK_PARTITION_FSTYPE}"
@@ -350,20 +329,10 @@ disk_plan_shrink() {
             ;;
     esac
 
-    # Resize partition table entry using parted
-    # parted resizepart expects END position, not size — calculate from partition start
-    local part_start_mib=""
-    if [[ "${DRY_RUN:-0}" == "1" ]]; then
-        part_start_mib="${_DRY_RUN_PART_START_MIB:-1}"
-    else
-        part_start_mib=$(parted -s "${disk}" unit MiB print 2>/dev/null \
-            | awk "/^ *${part_num} /{gsub(/MiB/,\"\"); print int(\$2)}")
-    fi
-    : "${part_start_mib:=0}"
-    local part_end_mib=$(( part_start_mib + new_size ))
-
-    disk_plan_add "Resize partition ${part_num} on ${disk}" \
-        parted -s "${disk}" resizepart "${part_num}" "${part_end_mib}MiB"
+    # Resize partition table entry
+    disk_plan_add_stdin "Resize partition table entry ${part_num} on ${disk}" \
+        ",${new_size}MiB"$'\n' \
+        sfdisk --force --no-reread -N "${part_num}" "${disk}"
 
     # Re-read partition table
     disk_plan_add "Re-read partition table on ${disk}" \
@@ -372,6 +341,39 @@ disk_plan_shrink() {
 
 # --- Phase 2: Execution ---
 
+# cleanup_target_disk — Unmount all partitions on target disk and deactivate swap
+# Required before repartitioning (existing partitions may block sfdisk)
+cleanup_target_disk() {
+    local disk="${TARGET_DISK}"
+
+    if [[ "${DRY_RUN}" == "1" ]]; then
+        einfo "[DRY-RUN] Would cleanup ${disk}"
+        return 0
+    fi
+
+    einfo "Cleaning up ${disk} (unmounting partitions, deactivating swap)..."
+
+    # Deactivate any swap partitions on this disk
+    local swap_part
+    while IFS= read -r swap_part; do
+        [[ -z "${swap_part}" ]] && continue
+        swapoff "${swap_part}" 2>/dev/null && einfo "Deactivated swap: ${swap_part}" || true
+    done < <(awk -v disk="${disk}" 'NR>1 && $1 ~ "^"disk"[p]?[0-9]" {print $1}' /proc/swaps 2>/dev/null)
+
+    # Unmount all partitions on this disk (reverse order for nested mounts)
+    local -a mounts
+    readarray -t mounts < <(awk -v disk="${disk}" '$1 ~ "^"disk"[p]?[0-9]" {print $2}' /proc/mounts 2>/dev/null | sort -r)
+
+    local mnt
+    for mnt in "${mounts[@]}"; do
+        [[ -z "${mnt}" ]] && continue
+        umount -l "${mnt}" 2>/dev/null && einfo "Unmounted: ${mnt}" || true
+    done
+
+    einfo "Cleanup of ${disk} complete"
+}
+
+# disk_execute_plan — Execute all planned disk operations
 disk_execute_plan() {
     if [[ ${#DISK_ACTIONS[@]} -eq 0 ]]; then
         case "${PARTITION_SCHEME:-auto}" in
@@ -384,7 +386,7 @@ disk_execute_plan() {
         esac
     fi
 
-    # Cleanup stale mounts/swap before partitioning
+    # Clean up any leftover mounts from previous installation attempts
     cleanup_target_disk
 
     disk_plan_show
@@ -394,14 +396,38 @@ disk_execute_plan() {
         local entry="${DISK_ACTIONS[$i]}"
         local desc="${entry%%|||*}"
         local cmd="${entry#*|||}"
+        local stdin_data="${DISK_STDIN[$i]:-}"
 
         einfo "[$((i + 1))/${#DISK_ACTIONS[@]}] ${desc}"
-        try "${desc}" bash -c "${cmd}"
+
+        if [[ -n "${stdin_data}" ]]; then
+            try "${desc}" bash -c "printf '%s' $(printf '%q' "${stdin_data}") | ${cmd}"
+        else
+            try "${desc}" bash -c "${cmd}"
+        fi
     done
 
+    # Ensure kernel recognizes new partitions
     if [[ "${DRY_RUN}" != "1" ]]; then
         partprobe "${TARGET_DISK}" 2>/dev/null || true
         sleep 2
+
+        # Verify ROOT_PARTITION exists for dual-boot (sfdisk --append may assign different number)
+        if [[ "${PARTITION_SCHEME:-}" == "dual-boot" && -n "${ROOT_PARTITION:-}" ]]; then
+            if [[ ! -b "${ROOT_PARTITION}" ]]; then
+                ewarn "Expected partition ${ROOT_PARTITION} not found, rescanning..."
+                local actual_last
+                actual_last=$(sfdisk --dump "${TARGET_DISK}" 2>/dev/null \
+                    | grep "^${TARGET_DISK}" | tail -1 | awk '{print $1}') || true
+                if [[ -n "${actual_last}" && -b "${actual_last}" ]]; then
+                    ewarn "Using detected partition: ${actual_last} (instead of ${ROOT_PARTITION})"
+                    ROOT_PARTITION="${actual_last}"
+                    export ROOT_PARTITION
+                else
+                    ewarn "Could not detect root partition — manual verification may be needed"
+                fi
+            fi
+        fi
     fi
 
     einfo "All disk operations completed"
@@ -466,8 +492,6 @@ mount_filesystems() {
     chmod 755 "${MOUNTPOINT}"
 
     # Mount boot and ESP
-    # For GRUB: /boot on root, /boot/efi for ESP
-    # For systemd-boot: /boot is ESP (special case)
     if [[ "${BOOTLOADER_TYPE:-grub}" == "systemd-boot" ]]; then
         mkdir -p "${MOUNTPOINT}/boot"
         try "Mounting ESP at /boot" mount "${ESP_PARTITION}" "${MOUNTPOINT}/boot"
@@ -500,7 +524,7 @@ unmount_filesystems() {
 
     # Unmount in reverse order (anchored match to avoid partial path collisions)
     local -a mounts
-    readarray -t mounts < <(awk -v mp="${MOUNTPOINT}" '$3 == mp || $3 ~ "^"mp"/" {print $3}' /proc/mounts | sort -r)
+    readarray -t mounts < <(awk -v mp="${MOUNTPOINT}" '$3 == mp || $3 ~ "^"mp"/" {print $3}' /proc/mounts 2>/dev/null | sort -r)
 
     local mnt
     for mnt in "${mounts[@]}"; do

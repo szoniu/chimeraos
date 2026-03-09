@@ -121,7 +121,8 @@ _tool_to_pkg() {
     case "$1" in
         mkfs.ext4)  echo "e2fsprogs" ;;
         mkfs.vfat)  echo "dosfstools" ;;
-        parted)     echo "parted" ;;
+        sfdisk)     echo "sfdisk" ;;
+        partprobe)  echo "parted" ;;
         blkid)      echo "util-linux" ;;
         lsblk)      echo "util-linux" ;;
         dialog)     echo "dialog" ;;
@@ -135,7 +136,8 @@ ensure_dependencies() {
     local -a required_tools=(
         mkfs.ext4
         mkfs.vfat
-        parted
+        sfdisk
+        partprobe
         blkid
         lsblk
     )
