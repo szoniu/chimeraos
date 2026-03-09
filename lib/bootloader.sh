@@ -22,8 +22,15 @@ _install_grub() {
 
     apk_install "Installing GRUB" grub-x86_64-efi
 
-    # Install GRUB to ESP
+    # Ensure ESP is mounted (chimera-chroot cleanup or resume may have lost it)
     local efi_dir="/boot/efi"
+    if [[ -n "${ESP_PARTITION:-}" ]] && ! mountpoint -q "${MOUNTPOINT}${efi_dir}" 2>/dev/null; then
+        einfo "Re-mounting ESP at ${efi_dir}..."
+        mkdir -p "${MOUNTPOINT}${efi_dir}"
+        try "Mounting ESP" mount "${ESP_PARTITION}" "${MOUNTPOINT}${efi_dir}"
+    fi
+
+    # Install GRUB to ESP
     try "Installing GRUB to ${efi_dir}" \
         chroot_exec "grub-install --efi-directory=${efi_dir}"
 
@@ -59,6 +66,13 @@ _install_systemd_boot() {
     einfo "Installing systemd-boot bootloader..."
 
     apk_install "Installing systemd-boot" systemd-boot
+
+    # Ensure ESP is mounted at /boot (systemd-boot uses /boot, not /boot/efi)
+    if [[ -n "${ESP_PARTITION:-}" ]] && ! mountpoint -q "${MOUNTPOINT}/boot" 2>/dev/null; then
+        einfo "Re-mounting ESP at /boot..."
+        mkdir -p "${MOUNTPOINT}/boot"
+        try "Mounting ESP" mount "${ESP_PARTITION}" "${MOUNTPOINT}/boot"
+    fi
 
     # Install bootloader
     try "Installing systemd-boot" \
