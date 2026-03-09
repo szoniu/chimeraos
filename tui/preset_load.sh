@@ -32,8 +32,7 @@ screen_preset_load() {
             fi
 
             preset_import "${file}"
-            dialog_msgbox "Preset Loaded" \
-                "Preset loaded from: ${file}\n\nHardware-specific values will be re-detected."
+            _preset_ask_skip
             return "${TUI_NEXT}"
             ;;
         browse)
@@ -53,9 +52,20 @@ screen_preset_load() {
             selected=$(dialog_menu "Select Preset" "${presets[@]}") || return "${TUI_BACK}"
 
             preset_import "${selected}"
-            dialog_msgbox "Preset Loaded" \
-                "Preset loaded: $(basename "${selected}")\n\nHardware-specific values will be re-detected."
+            _preset_ask_skip
             return "${TUI_NEXT}"
             ;;
     esac
+}
+
+# _preset_ask_skip — Ask user whether to skip config screens after preset load
+_preset_ask_skip() {
+    local skip_rc=0
+    dialog_yesno "Preset Loaded" \
+        "Preset loaded successfully.\n\nSkip to password setup + summary?\n\nChoose 'No' to review all settings." \
+        || skip_rc=$?
+    if [[ ${skip_rc} -eq 0 ]]; then
+        _PRESET_SKIP_TO_USER=1
+        export _PRESET_SKIP_TO_USER
+    fi
 }
