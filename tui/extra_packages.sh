@@ -2,31 +2,47 @@
 # tui/extra_packages.sh — Checklist with conditional hardware items + free-form input
 source "${LIB_DIR}/protection.sh"
 
+_extra_pkg_state() {
+    local pkg="$1" default="$2"
+    # Check EXTRA_PACKAGES and ENABLE_* flags from preset
+    if [[ -n "${EXTRA_PACKAGES:-}" ]] && echo " ${EXTRA_PACKAGES} " | grep -qw "${pkg}"; then
+        echo "on"
+        return
+    fi
+    case "${pkg}" in
+        fprintd)           [[ "${ENABLE_FINGERPRINT:-no}" == "yes" ]] && echo "on" && return ;;
+        bolt)              [[ "${ENABLE_THUNDERBOLT:-no}" == "yes" ]] && echo "on" && return ;;
+        iio-sensor-proxy)  [[ "${ENABLE_SENSORS:-no}" == "yes" ]] && echo "on" && return ;;
+        ModemManager)      [[ "${ENABLE_WWAN:-no}" == "yes" ]] && echo "on" && return ;;
+    esac
+    echo "${default}"
+}
+
 screen_extra_packages() {
     local -a items=()
 
     # --- Always-visible items ---
-    items+=("fastfetch"   "System info tool"          "off")
-    items+=("btop"        "Resource monitor"           "off")
-    items+=("htop"        "Process viewer"             "off")
-    items+=("kitty"       "GPU-accelerated terminal"   "off")
-    items+=("vim"         "Vi improved text editor"    "off")
-    items+=("git"         "Version control system"     "off")
-    items+=("tmux"        "Terminal multiplexer"       "off")
-    items+=("v4l-utils"   "Video4Linux utilities"      "off")
+    items+=("fastfetch"   "System info tool"          "$(_extra_pkg_state fastfetch off)")
+    items+=("btop"        "Resource monitor"           "$(_extra_pkg_state btop off)")
+    items+=("htop"        "Process viewer"             "$(_extra_pkg_state htop off)")
+    items+=("kitty"       "GPU-accelerated terminal"   "$(_extra_pkg_state kitty off)")
+    items+=("vim"         "Vi improved text editor"    "$(_extra_pkg_state vim off)")
+    items+=("git"         "Version control system"     "$(_extra_pkg_state git off)")
+    items+=("tmux"        "Terminal multiplexer"       "$(_extra_pkg_state tmux off)")
+    items+=("v4l-utils"   "Video4Linux utilities"      "$(_extra_pkg_state v4l-utils off)")
 
     # --- Conditional items (hardware-detected) ---
     if [[ "${FINGERPRINT_DETECTED:-0}" == "1" ]]; then
-        items+=("fprintd"  "Fingerprint authentication" "off")
+        items+=("fprintd"  "Fingerprint authentication" "$(_extra_pkg_state fprintd off)")
     fi
     if [[ "${THUNDERBOLT_DETECTED:-0}" == "1" ]]; then
-        items+=("bolt"     "Thunderbolt device manager"  "off")
+        items+=("bolt"     "Thunderbolt device manager"  "$(_extra_pkg_state bolt off)")
     fi
     if [[ "${SENSORS_DETECTED:-0}" == "1" ]]; then
-        items+=("iio-sensor-proxy" "IIO sensor support (2-in-1)" "off")
+        items+=("iio-sensor-proxy" "IIO sensor support (2-in-1)" "$(_extra_pkg_state iio-sensor-proxy off)")
     fi
     if [[ "${WWAN_DETECTED:-0}" == "1" ]]; then
-        items+=("ModemManager" "WWAN/LTE modem support"  "off")
+        items+=("ModemManager" "WWAN/LTE modem support"  "$(_extra_pkg_state ModemManager off)")
     fi
 
     local selected
@@ -59,11 +75,19 @@ screen_extra_packages() {
         esac
     done
 
+    # Collect any preset EXTRA_PACKAGES not in the checklist above
+    local _known_pkgs="fastfetch btop htop kitty vim git tmux v4l-utils fprintd bolt iio-sensor-proxy ModemManager"
+    local _preset_extra=""
+    local _ep
+    for _ep in ${EXTRA_PACKAGES:-}; do
+        echo " ${_known_pkgs} " | grep -qw "${_ep}" || _preset_extra+="${_ep} "
+    done
+
     # Free-form input for additional packages
     local more_pkgs
     more_pkgs=$(dialog_inputbox "Additional Packages" \
         "Enter any additional apk packages (space-separated):\n\nLeave blank to skip." \
-        "") || true
+        "${_preset_extra}") || true
 
     if [[ -n "${more_pkgs}" ]]; then
         local p

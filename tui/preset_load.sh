@@ -62,7 +62,7 @@ screen_preset_load() {
 _preset_ask_skip() {
     local skip_rc=0
     dialog_yesno "Preset Loaded" \
-        "Preset loaded successfully.\n\nSkip to password setup + summary?\n\nChoose 'No' to review all settings." \
+        "Preset loaded successfully.\n\nSkip to summary? (You'll still select disk.)\n\nChoose 'No' to review all settings." \
         || skip_rc=$?
     if [[ ${skip_rc} -eq 0 ]]; then
         _PRESET_SKIP_TO_USER=1
