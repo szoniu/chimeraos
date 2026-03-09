@@ -136,7 +136,11 @@ screen_progress() {
 
             # Re-setup chroot if skipped (pseudo-FS mounts needed for later phases)
             if [[ "${phase_name}" == "chroot_setup" ]]; then
-                chroot_setup
+                if mountpoint -q "${MOUNTPOINT}" 2>/dev/null; then
+                    chroot_setup
+                else
+                    ewarn "Filesystem not mounted at ${MOUNTPOINT} — chroot setup deferred"
+                fi
             fi
 
             continue

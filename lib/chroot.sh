@@ -95,6 +95,13 @@ copy_dns_info() {
         return 0
     fi
 
+    if ! mountpoint -q "${MOUNTPOINT}" 2>/dev/null; then
+        ewarn "Target ${MOUNTPOINT} is not mounted — skipping DNS copy"
+        return 0
+    fi
+
+    mkdir -p "${MOUNTPOINT}/etc"
+
     if [[ -L "${MOUNTPOINT}/etc/resolv.conf" ]]; then
         rm "${MOUNTPOINT}/etc/resolv.conf"
     fi
