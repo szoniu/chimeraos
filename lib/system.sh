@@ -251,7 +251,7 @@ system_create_users() {
         groups="${valid_groups:-wheel}"
 
         try "Creating user ${USERNAME}" \
-            chroot_exec "useradd -m -G ${groups} -s /bin/bash ${USERNAME}"
+            chroot_exec "useradd -m -G ${groups} -s /bin/sh ${USERNAME}"
 
         if [[ -n "${USER_PASSWORD_HASH:-}" ]]; then
             try "Setting user password" \
