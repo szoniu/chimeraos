@@ -35,8 +35,8 @@ lib/
 ├── logging.sh          — elog/einfo/ewarn/eerror/die/die_trace
 ├── utils.sh            — try() (text fallback, LIVE_OUTPUT), checkpoint_*/validate/migrate, cleanup_target_disk, try_resume_from_disk, infer_config_from_partition
 ├── dialog.sh           — Wrapper gum/dialog/whiptail, primitives, wizard runner, bundled gum extraction
-├── config.sh           — config_save/load/set/get (${VAR@Q}), validate_config()
-├── hardware.sh         — detect_cpu/gpu(multi-GPU/hybrid)/disks/esp/installed_oses, detect_asus_rog, detect_bluetooth/fingerprint/thunderbolt/sensors/webcam/wwan, serialize/deserialize_detected_oses
+├── config.sh           — config_save/load/set/get/dump/diff (${VAR@Q}), validate_config()
+├── hardware.sh         — detect_cpu/gpu(multi-GPU/hybrid)/disks/esp/installed_oses, detect_asus_rog, detect_bluetooth/fingerprint/thunderbolt/sensors/webcam/wwan, serialize/deserialize_detected_oses, get_hardware_summary()
 ├── disk.sh             — Dwufazowe: plan -> execute, mount/unmount, LUKS, shrink helpers (disk_plan_shrink via parted)
 ├── bootstrap.sh        — chimera-bootstrap, apk_install, apk_update
 ├── chroot.sh           — chimera-chroot wrapper, bind mounts, DNS
@@ -73,7 +73,7 @@ data/
 
 presets/                — desktop-amd.conf, desktop-intel.conf, desktop-nvidia-open.conf
 hooks/                  — *.sh.example
-tests/                  — test_config, test_disk, shellcheck
+tests/                  — test_config, test_disk, test_infer_config, test_multiboot, test_shrink, shellcheck
 ```
 
 ### Kluczowe moduly
@@ -186,7 +186,8 @@ Checks: required variables, enum values, hostname RFC 1123, block device existen
 
 ```
 HYBRID_GPU, IGPU_VENDOR, IGPU_DEVICE_NAME, DGPU_VENDOR, DGPU_DEVICE_NAME
-ASUS_ROG_DETECTED, ENABLE_ASUSCTL
+LUKS_ENABLED, LUKS_PARTITION, BOOTLOADER_TYPE
+GPU_DEVICE_ID, ENABLE_FLATPAK, ENABLE_PRINTING, ENABLE_BLUETOOTH, ENABLE_SSH
 BLUETOOTH_DETECTED, FINGERPRINT_DETECTED, ENABLE_FINGERPRINT
 THUNDERBOLT_DETECTED, ENABLE_THUNDERBOLT, SENSORS_DETECTED, ENABLE_SENSORS
 WEBCAM_DETECTED, WWAN_DETECTED, ENABLE_WWAN
@@ -200,9 +201,8 @@ SHRINK_PARTITION, SHRINK_PARTITION_FSTYPE, SHRINK_NEW_SIZE_MIB
 bash tests/test_config.sh          # Config round-trip
 bash tests/test_disk.sh            # Disk planning
 bash tests/test_infer_config.sh    # Config inference from installed system
-bash tests/test_hybrid_gpu.sh      # Hybrid GPU + recommendation
-bash tests/test_validate.sh        # Config validation before install
-bash tests/test_peripherals.sh     # Peripheral detection + config vars
+bash tests/test_multiboot.sh       # Multi-OS detection + dual-boot
+bash tests/test_shrink.sh          # Partition shrink wizard
 ```
 
 ## Jak dodawac opcje

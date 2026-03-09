@@ -112,14 +112,20 @@ doas apk add pakiet
 ## Alternatywne uruchomienie
 
 ```bash
-./install.sh                    # Pelna instalacja (wizard + install)
-./install.sh --configure        # Tylko wizard (generuje config)
-./install.sh --install          # Tylko instalacja (wymaga configa)
-./install.sh --config plik.conf --install   # Z gotowego configa
-./install.sh --resume           # Wznowienie przerwanej instalacji
-./install.sh --dry-run          # Symulacja bez dotykania dyskow
-./install.sh --force            # Kontynuuj mimo bledow prerequisite
-./install.sh --non-interactive  # Abort zamiast recovery menu
+# Tylko konfiguracja (generuje plik .conf, nic nie instaluje)
+./install.sh --configure
+
+# Instalacja z gotowego configa (bez wizarda)
+./install.sh --config moj-config.conf --install
+
+# Wznow po awarii (skanuje dyski w poszukiwaniu checkpointow)
+./install.sh --resume
+
+# Dry-run — przechodzi caly flow BEZ dotykania dyskow
+./install.sh --dry-run
+
+# Z presetu (np. dla kolegi z AMD)
+./install.sh --config presets/desktop-amd.conf --install
 ```
 
 ## Wymagania
@@ -128,7 +134,7 @@ doas apk add pakiet
 - **Secure Boot wylaczony**
 - Minimum **20 GiB** wolnego miejsca na dysku
 - Internet (LAN lub WiFi)
-- Chimera Linux Live ISO (potrzebny `chimera-bootstrap` i `dialog`)
+- Chimera Linux Live ISO (potrzebny `chimera-bootstrap`; `dialog`/`whiptail` opcjonalny — installer ma zaszyty `gum`)
 
 ## Co robi installer
 
@@ -230,6 +236,27 @@ ssh -o PubkeyAuthentication=no root@ADRES_IP
 
 Na maszynach z mala iloscia RAM (<8 GB) kompilacja duzych pakietow moze powodowac zawieszenie. Chimera uzywa binarnych paczek, wiec problem jest rzadszy niz przy Gentoo, ale nadal mozliwy.
 
+### Drugie TTY — twoj najlepszy przyjaciel
+
+Podczas instalacji masz dostep do wielu konsol. Przelaczaj sie przez **Ctrl+Alt+F1**...**F6**:
+
+- **TTY1** — installer (tu leci instalacja)
+- **TTY2-6** — wolne konsole do debugowania
+
+Na drugim TTY mozesz:
+
+```bash
+# Podglad co sie dzieje w czasie rzeczywistym
+top
+
+# Log installera
+tail -f /tmp/chimera-installer.log                  # przed chroot
+tail -f /media/root/tmp/chimera-installer.log       # w chroot
+
+# Sprawdz czy cos nie zawieszilo sie
+ps aux | grep -E "tee|apk|chimera"
+```
+
 ## Co jesli cos pojdzie nie tak
 
 - **Blad** — menu: Retry / Shell / Continue / Log / Abort
@@ -248,6 +275,88 @@ Na maszynach z mala iloscia RAM (<8 GB) kompilacja duzych pakietow moze powodowa
 | GPU | open-source only | proprietary OK | proprietary OK |
 | Rollback | btrfs snapshots | brak | wbudowany |
 | LUKS | wbudowane | do zrobienia | wbudowane |
+
+## Interfejs TUI
+
+Installer ma trzy backendy TUI (w kolejnosci priorytetu):
+
+1. **gum** (domyslny) — nowoczesny, zaszyty w repo jako `data/gum.tar.gz` (~4.5 MB). Ekstraowany automatycznie do `/tmp` na starcie. Zero dodatkowych zaleznosci.
+2. **dialog** — klasyczny TUI, dostepny na wiekszosci live ISO
+3. **whiptail** — fallback gdy brak `dialog`
+
+Backend jest wybierany automatycznie. Zeby wymusic fallback na `dialog`/`whiptail`:
+
+```bash
+GUM_BACKEND=0 ./install.sh
+```
+
+### Aktualizacja gum
+
+Zeby zaktualizowac bundlowana wersje gum:
+
+```bash
+# 1. Pobierz nowy tarball (podmien wersje)
+curl -fSL -o data/gum.tar.gz \
+  "https://github.com/charmbracelet/gum/releases/download/v0.18.0/gum_0.18.0_Linux_x86_64.tar.gz"
+
+# 2. Zaktualizuj GUM_VERSION w lib/constants.sh (musi pasowac do nazwy podkatalogu w tarballi)
+#    : "${GUM_VERSION:=0.18.0}"
+```
+
+## Hooki (zaawansowane)
+
+Wlasne skrypty uruchamiane przed/po fazach instalacji:
+
+```bash
+cp hooks/before_install.sh.example hooks/before_install.sh
+chmod +x hooks/before_install.sh
+# Edytuj hook...
+```
+
+Dostepne hooki: `before_install`, `after_install`, `before_preflight`, `after_preflight`, `before_disks`, `after_disks`, `before_bootstrap`, `after_bootstrap`, `before_chroot_setup`, `after_chroot_setup`, `before_apk_update`, `after_apk_update`, `before_kernel`, `after_kernel`, `before_fstab`, `after_fstab`, `before_system_config`, `after_system_config`, `before_bootloader`, `after_bootloader`, `before_swap_setup`, `after_swap_setup`, `before_networking`, `after_networking`, `before_desktop`, `after_desktop`, `before_users`, `after_users`, `before_extras`, `after_extras`, `before_finalize`, `after_finalize`.
+
+## Wykrywanie peryferiow
+
+Installer automatycznie wykrywa sprzet i wyswietla go w ekranie Hardware:
+
+| Peryferium | Metoda detekcji | Pakiet (opt-in w checklistie) |
+|---|---|---|
+| Bluetooth | `/sys/class/bluetooth/hci*` | automatycznie z desktopem |
+| Czytnik linii papilarnych | USB vendor IDs (Synaptics, Goodix, AuthenTec, Validity, Elan) | `fprintd` |
+| Thunderbolt | sysfs + lspci | `bolt` |
+| Czujniki IIO (2-in-1) | `/sys/bus/iio/devices/` (accel, gyro, als) | `iio-sensor-proxy` |
+| Kamera | `/sys/class/video4linux/video*/name` | — |
+| WWAN LTE | lspci (Intel XMM7360) | `modemmanager` |
+
+Wykryty sprzet pojawia sie jako opcje w ekranie "Dodatkowe pakiety" — widoczne tylko gdy odpowiedni sprzet zostal wykryty.
+
+## ASUS ROG / TUF
+
+Installer wykrywa laptopy ASUS ROG i TUF (przez DMI: board_vendor + product_name). Wykrycie jest wyswietlane w ekranie Hardware i podsumowaniu.
+
+> **Uwaga**: Chimera Linux (musl libc) nie ma paczek `asusctl`/`supergfxctl`. Detekcja jest informacyjna — pozwala uzytkownikowi wiedziec, ze sprzet zostal rozpoznany.
+
+## Opcje CLI
+
+```
+./install.sh [OPCJE] [POLECENIE]
+
+Polecenia:
+  (domyslnie)      Pelna instalacja (wizard + install)
+  --configure       Tylko wizard konfiguracyjny
+  --install         Tylko instalacja (wymaga configa)
+  --resume          Wznow po awarii (skanuje dyski)
+
+Opcje:
+  --config PLIK     Uzyj podanego pliku konfiguracji
+  --dry-run         Symulacja bez destrukcyjnych operacji
+  --force           Kontynuuj mimo nieudanych prereq
+  --non-interactive Przerwij na kazdym bledzie (bez recovery menu)
+  --help            Pokaz pomoc
+
+Zmienne srodowiskowe:
+  GUM_BACKEND=0     Wymusz fallback na dialog/whiptail (pomin gum)
+```
 
 ## Testy
 
@@ -289,6 +398,12 @@ Lekki init system z zaleznosciami miedzy uslugami. Zamiast `systemctl` uzywasz `
 
 **P: Czym jest doas?**
 Chimera uzywa `doas` zamiast `sudo`. Skladnia: `doas apk add pakiet`.
+
+**P: Moge uzyc innego live ISO niz Chimera?**
+Tak, dowolne live ISO z Linuxem zadziala, pod warunkiem ze ma `bash`, `git`, `sfdisk`, `chimera-bootstrap`. Installer ma zaszyty `gum` jako backend TUI, wiec `dialog`/`whiptail` nie jest wymagany.
+
+**P: Co jesli `gum` nie dziala?**
+Installer automatycznie uzyje `dialog` lub `whiptail` jako fallback. Mozesz tez wymusic fallback: `GUM_BACKEND=0 ./install.sh`.
 
 **P: Jak wrócic do poprzedniej konfiguracji?**
 Jesli uzywasz btrfs — mozesz uzyc snapshotow. W przeciwnym razie warto robic backup.
