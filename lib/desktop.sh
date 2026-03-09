@@ -115,26 +115,13 @@ _install_kde_apps() {
     apk_install "Installing basic KDE apps" \
         konsole dolphin
 
-    # Install selected extras
+    # Install selected extras (skip unavailable — not all KDE apps are in Chimera repos)
     if [[ -n "${extras}" ]]; then
         local cleaned
         cleaned=$(echo "${extras}" | tr -d '"')
         local pkg
         for pkg in ${cleaned}; do
-            case "${pkg}" in
-                kate)          apk_install "Installing ${pkg}" kate ;;
-                firefox)       apk_install "Installing ${pkg}" firefox ;;
-                gwenview)      apk_install "Installing ${pkg}" gwenview ;;
-                okular)        apk_install "Installing ${pkg}" okular ;;
-                ark)           apk_install "Installing ${pkg}" ark ;;
-                spectacle)     apk_install "Installing ${pkg}" spectacle ;;
-                kcalc)         apk_install "Installing ${pkg}" kcalc ;;
-                elisa)         apk_install "Installing ${pkg}" elisa ;;
-                vlc)           apk_install "Installing ${pkg}" vlc ;;
-                libreoffice)   apk_install "Installing ${pkg}" libreoffice ;;
-                thunderbird)   apk_install "Installing ${pkg}" thunderbird ;;
-                *)             apk_install_if_available "${pkg}" ;;
-            esac
+            apk_install_if_available "${pkg}"
         done
     fi
 }
