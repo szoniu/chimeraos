@@ -11,6 +11,24 @@ bootstrap_install() {
         return 0
     fi
 
+    # chimera-bootstrap requires an empty directory
+    # If retrying after a failed attempt, clean up first
+    if [[ -d "${MOUNTPOINT}" ]] && [[ -n "$(ls -A "${MOUNTPOINT}" 2>/dev/null)" ]]; then
+        ewarn "Target directory ${MOUNTPOINT} is not empty — cleaning up"
+
+        # Unmount any nested mounts (ESP, btrfs subvols) before cleaning
+        local -a nested_mounts
+        readarray -t nested_mounts < <(awk -v mp="${MOUNTPOINT}" '$2 ~ "^"mp"/" {print $2}' /proc/mounts 2>/dev/null | sort -r)
+        local m
+        for m in "${nested_mounts[@]}"; do
+            [[ -z "${m}" ]] && continue
+            umount -l "${m}" 2>/dev/null || true
+        done
+
+        # Remove contents but keep the mount point itself
+        find "${MOUNTPOINT}" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+    fi
+
     # chimera-bootstrap installs base-full by default
     # -l flag = local (from live ISO, offline)
     # without -l = network install (downloads latest)
