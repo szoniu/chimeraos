@@ -133,16 +133,16 @@ disk_plan_dualboot() {
             free_start="50%"
             free_end="100%"
         elif [[ -n "${SHRINK_PARTITION:-}" ]]; then
-            # After shrink, free space starts where the shrunk partition will end
-            # parted resizepart uses SHRINK_NEW_SIZE_MIB as end position
-            local part_num
-            part_num=$(echo "${SHRINK_PARTITION}" | sed 's/.*[^0-9]\([0-9]*\)$/\1/')
+            # After shrink, free space starts at partition start + new size
+            local shrink_part_num
+            shrink_part_num=$(echo "${SHRINK_PARTITION}" | sed 's/.*[^0-9]\([0-9]*\)$/\1/')
             local part_line
             part_line=$(parted -s "${disk}" unit MiB print 2>/dev/null \
-                | grep "^ *${part_num} " | head -1) || true
-            local orig_end_mib
+                | grep "^ *${shrink_part_num} " | head -1) || true
+            local part_start_mib orig_end_mib
+            part_start_mib=$(echo "${part_line}" | awk '{gsub(/MiB/,""); print int($2)}')
             orig_end_mib=$(echo "${part_line}" | awk '{gsub(/MiB/,""); print int($3)}')
-            free_start="${SHRINK_NEW_SIZE_MIB}MiB"
+            free_start="$(( part_start_mib + SHRINK_NEW_SIZE_MIB ))MiB"
             free_end="${orig_end_mib}MiB"
         else
             # Find largest existing free region
@@ -351,8 +351,19 @@ disk_plan_shrink() {
     esac
 
     # Resize partition table entry using parted
+    # parted resizepart expects END position, not size — calculate from partition start
+    local part_start_mib=""
+    if [[ "${DRY_RUN:-0}" == "1" ]]; then
+        part_start_mib="${_DRY_RUN_PART_START_MIB:-1}"
+    else
+        part_start_mib=$(parted -s "${disk}" unit MiB print 2>/dev/null \
+            | awk "/^ *${part_num} /{gsub(/MiB/,\"\"); print int(\$2)}")
+    fi
+    : "${part_start_mib:=0}"
+    local part_end_mib=$(( part_start_mib + new_size ))
+
     disk_plan_add "Resize partition ${part_num} on ${disk}" \
-        parted -s "${disk}" resizepart "${part_num}" "${new_size}MiB"
+        parted -s "${disk}" resizepart "${part_num}" "${part_end_mib}MiB"
 
     # Re-read partition table
     disk_plan_add "Re-read partition table on ${disk}" \
