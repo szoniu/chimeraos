@@ -443,6 +443,17 @@ mount_filesystems() {
         return 0
     fi
 
+    # Open LUKS container if needed (e.g. after retry or resume)
+    if [[ "${LUKS_ENABLED:-no}" == "yes" && -n "${LUKS_PARTITION:-}" ]]; then
+        if [[ ! -b /dev/mapper/cryptroot ]]; then
+            einfo "Opening LUKS container on ${LUKS_PARTITION}..."
+            try "Open LUKS partition" \
+                cryptsetup luksOpen "${LUKS_PARTITION}" cryptroot
+        fi
+        ROOT_PARTITION="/dev/mapper/cryptroot"
+        export ROOT_PARTITION
+    fi
+
     mkdir -p "${MOUNTPOINT}"
 
     local fs="${FILESYSTEM:-ext4}"
