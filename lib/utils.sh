@@ -116,48 +116,81 @@ countdown() {
     printf "\r%s\n" "$(printf '%-60s' '')" >&2
 }
 
-# check_dependencies — Verify required tools are available
-check_dependencies() {
-    local -a missing=()
-    local dep
+# Tool-to-package mapping for apk
+_tool_to_pkg() {
+    case "$1" in
+        mkfs.ext4)  echo "e2fsprogs" ;;
+        mkfs.vfat)  echo "dosfstools" ;;
+        parted)     echo "parted" ;;
+        blkid)      echo "util-linux" ;;
+        lsblk)      echo "util-linux" ;;
+        dialog)     echo "dialog" ;;
+        chimera-bootstrap) echo "chimera-install-scripts" ;;
+        *)          echo "$1" ;;
+    esac
+}
 
-    local -a required_deps=(
-        bash
+# ensure_dependencies — Install missing tools automatically via apk
+ensure_dependencies() {
+    local -a required_tools=(
         mkfs.ext4
         mkfs.vfat
         parted
-        mount
-        umount
         blkid
         lsblk
     )
 
-    for dep in "${required_deps[@]}"; do
+    # dialog or whiptail (need at least one)
+    local has_dialog=0
+    command -v dialog &>/dev/null && has_dialog=1
+    command -v whiptail &>/dev/null && has_dialog=1
+    command -v gum &>/dev/null && has_dialog=1
+
+    local -a missing_tools=()
+    local -a missing_pkgs=()
+    local dep pkg
+
+    for dep in "${required_tools[@]}"; do
         if ! command -v "${dep}" &>/dev/null; then
-            missing+=("${dep}")
+            missing_tools+=("${dep}")
+            pkg=$(_tool_to_pkg "${dep}")
+            # Avoid duplicate packages
+            local already=0
+            local p
+            for p in "${missing_pkgs[@]+"${missing_pkgs[@]}"}"; do
+                [[ "${p}" == "${pkg}" ]] && already=1
+            done
+            [[ ${already} -eq 0 ]] && missing_pkgs+=("${pkg}")
         fi
     done
 
-    # dialog or whiptail
-    if ! command -v dialog &>/dev/null && ! command -v whiptail &>/dev/null; then
-        missing+=("dialog|whiptail")
+    if [[ ${has_dialog} -eq 0 ]]; then
+        missing_tools+=("dialog")
+        missing_pkgs+=("dialog")
     fi
 
-    # chimera-bootstrap
     if ! command -v chimera-bootstrap &>/dev/null; then
-        missing+=("chimera-bootstrap (chimera-install-scripts)")
+        missing_tools+=("chimera-bootstrap")
+        missing_pkgs+=("chimera-install-scripts")
     fi
 
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        eerror "Missing required dependencies:"
-        local m
-        for m in "${missing[@]}"; do
-            eerror "  - ${m}"
-        done
-        return 1
+    if [[ ${#missing_pkgs[@]} -eq 0 ]]; then
+        einfo "All dependencies satisfied"
+        return 0
     fi
 
-    einfo "All dependencies satisfied"
+    einfo "Installing missing dependencies: ${missing_pkgs[*]}"
+    if [[ "${DRY_RUN}" != "1" ]]; then
+        apk add "${missing_pkgs[@]}" || {
+            eerror "Failed to install: ${missing_pkgs[*]}"
+            eerror "Missing tools: ${missing_tools[*]}"
+            return 1
+        }
+    else
+        einfo "[DRY-RUN] Would run: apk add ${missing_pkgs[*]}"
+    fi
+
+    einfo "Dependencies installed successfully"
     return 0
 }
 

@@ -230,6 +230,8 @@ preflight_checks() {
         has_network || die "Network connectivity required"
     fi
 
+    ensure_dependencies
+
     # Sync clock if possible
     if command -v chronyd &>/dev/null && [[ "${DRY_RUN}" != "1" ]]; then
         try "Syncing system clock" chronyd -q || true

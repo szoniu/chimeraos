@@ -49,10 +49,6 @@ Press OK to check prerequisites and continue."
         warnings+=("No network connectivity detected. You will need internet for installation.")
     fi
 
-    if ! command -v chimera-bootstrap &>/dev/null; then
-        errors+=("chimera-bootstrap not found. Install chimera-install-scripts.")
-    fi
-
     if [[ -z "${DIALOG_CMD:-}" ]]; then
         errors+=("No dialog backend available.")
     fi
@@ -70,9 +66,6 @@ Press OK to check prerequisites and continue."
     fi
     if has_network 2>/dev/null; then
         status_text+="  [OK] Network connectivity\n"
-    fi
-    if command -v chimera-bootstrap &>/dev/null; then
-        status_text+="  [OK] chimera-bootstrap available\n"
     fi
     status_text+="  [OK] Dialog backend: ${DIALOG_CMD:-unknown}\n"
 
