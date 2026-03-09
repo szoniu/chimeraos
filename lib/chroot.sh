@@ -74,11 +74,15 @@ chroot_exec() {
         return 0
     fi
 
+    # Pass LIVE_OUTPUT so try() inside chroot shows output on terminal via tee
+    local env_prefix=""
+    [[ "${LIVE_OUTPUT:-0}" == "1" ]] && env_prefix="LIVE_OUTPUT=1 "
+
     if command -v chimera-chroot &>/dev/null; then
         # chimera-chroot auto-mounts pseudo-filesystems
-        chimera-chroot "${MOUNTPOINT}" /bin/sh -c "$*"
+        chimera-chroot "${MOUNTPOINT}" /bin/sh -c "${env_prefix}$*"
     else
-        chroot "${MOUNTPOINT}" /bin/sh -c "$*"
+        chroot "${MOUNTPOINT}" /bin/sh -c "${env_prefix}$*"
     fi
 }
 

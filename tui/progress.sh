@@ -89,7 +89,7 @@ _validate_and_clean_checkpoints() {
     done
 }
 
-# screen_progress — Run installation with infobox status display
+# screen_progress — Run installation with live log preview
 screen_progress() {
     local total=${#INSTALL_PHASES[@]}
     local i=0
@@ -101,9 +101,23 @@ screen_progress() {
         einfo "Resuming installation from previous progress"
     fi
 
-    # Redirect stderr to log file so log messages don't bleed through dialog
-    exec 4>&2
-    exec 2>>"${LOG_FILE}"
+    # Restore terminal echo (was disabled for gum TUI)
+    stty echo </dev/tty 2>/dev/null || true
+    _GUM_ECHO_OFF=0
+    # Flush accumulated terminal responses from the wizard session
+    sleep 0.3
+    dd if=/dev/tty of=/dev/null bs=4096 count=100 iflag=nonblock 2>/dev/null || true
+    while read -t 0.1 -rsn 1 _ </dev/tty 2>/dev/null; do :; done
+
+    # Enable live output globally — commands output via tee (terminal + log)
+    export LIVE_OUTPUT=1
+
+    # Print initial header
+    if [[ "${NON_INTERACTIVE:-0}" != "1" ]]; then
+        printf '\033[H\033[2J' >/dev/tty 2>/dev/null
+        _live_preview_header "1" "${total}" "Starting..." >/dev/tty 2>/dev/null || true
+        echo "" >/dev/tty
+    fi
 
     for entry in "${INSTALL_PHASES[@]}"; do
         local phase_name phase_desc
@@ -115,28 +129,25 @@ screen_progress() {
 
             # Re-mount filesystems if disks phase is skipped (needed after reboot)
             if [[ "${phase_name}" == "disks" ]]; then
-                exec 2>&4
                 mount_filesystems
                 checkpoint_migrate_to_target
                 _save_config_to_target
-                exec 2>>"${LOG_FILE}"
             fi
 
             continue
         fi
 
-        if [[ "${phase_name}" == "desktop" ]]; then
-            # Desktop phase — show live output (long-running apk installs)
-            _run_phase_with_live_output "${phase_name}" "${phase_desc}"
-        else
-            _show_phase_status "${i}" "${total}" "${phase_desc}"
-            _execute_phase "${phase_name}" "${phase_desc}"
+        # Print phase separator with progress info
+        if [[ "${NON_INTERACTIVE:-0}" != "1" ]]; then
+            echo "" >/dev/tty
+            _live_preview_header "${i}" "${total}" "${phase_desc}" >/dev/tty 2>/dev/null || true
+            echo "" >/dev/tty
         fi
+
+        _execute_phase "${phase_name}" "${phase_desc}"
     done
 
-    # Restore stderr
-    exec 2>&4
-    exec 4>&-
+    unset LIVE_OUTPUT
 
     dialog_msgbox "Installation Complete" \
         "Chimera Linux has been successfully installed!\n\n\
@@ -147,54 +158,25 @@ Log file: ${LOG_FILE}"
     return "${TUI_NEXT}"
 }
 
-# _run_phase_with_live_output — Run a phase with visible log output
-_run_phase_with_live_output() {
-    local phase_name="$1"
-    local phase_desc="$2"
-
-    # Restore stderr so user sees live output
-    exec 2>&4
-
-    clear 2>/dev/null
-    echo -e "\033[1;36m══════════════════════════════════════════════════════════════════\033[0m"
-    echo -e "\033[1;37m  Chimera Linux TUI Installer — ${phase_desc}                     \033[0m"
-    echo -e "\033[1;36m══════════════════════════════════════════════════════════════════\033[0m"
-    echo -e "\033[0;33m  Live output below. Full log: ${LOG_FILE}    \033[0m"
-    echo -e "\033[1;36m══════════════════════════════════════════════════════════════════\033[0m"
-    echo ""
-
-    export LIVE_OUTPUT=1
-    _execute_phase "${phase_name}" "${phase_desc}"
-    unset LIVE_OUTPUT
-
-    echo ""
-    echo -e "\033[1;32m══════════════════════════════════════════════════════════════════\033[0m"
-    echo -e "\033[1;32m  ${phase_desc} complete!                                         \033[0m"
-    echo -e "\033[1;32m══════════════════════════════════════════════════════════════════\033[0m"
-    sleep 2
-
-    # Re-redirect stderr
-    exec 2>>"${LOG_FILE}"
-}
-
-# _show_phase_status — Display current phase in dialog_infobox
-_show_phase_status() {
+# _live_preview_header — Print progress header with bar
+_live_preview_header() {
     local current="$1" total="$2" desc="$3"
 
+    local bar_width=40
+    local filled=$(( bar_width * current / total ))
+    local empty=$(( bar_width - filled ))
     local bar=""
     local j
-    for (( j = 1; j <= total; j++ )); do
-        if (( j < current )); then
-            bar+="[done] "
-        elif (( j == current )); then
-            bar+="[>>>>] "
-        else
-            bar+="[    ] "
-        fi
-    done
+    for (( j = 0; j < filled; j++ )); do bar+="█"; done
+    for (( j = 0; j < empty; j++ )); do bar+="░"; done
 
-    dialog_infobox "Installing Chimera Linux  [${current}/${total}]" \
-        "${bar}\n\n${desc}...\n\nPlease wait. See ${LOG_FILE} for details."
+    local phase_info="Phase ${current}/${total}"
+
+    echo "=== ${INSTALLER_NAME} v${INSTALLER_VERSION} ==="
+    echo "[${bar}] ${phase_info}"
+    echo "${desc}"
+    printf '%.0s─' $(seq 1 "${DIALOG_WIDTH:-76}")
+    echo
 }
 
 # _execute_phase — Execute a single installation phase
