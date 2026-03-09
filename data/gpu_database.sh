@@ -14,12 +14,12 @@ get_gpu_recommendation() {
         "10de")
             # NVIDIA — NVK (nouveau Vulkan) + nouveau kernel driver
             # NVK supports Kepler (GK) through Ada Lovelace (AD)
-            echo "nvk|linux-firmware-nvidia|Open-source only (NVK/nouveau)"
+            echo "nvk|firmware-linux-nvidia|Open-source only (NVK/nouveau)"
             ;;
         "1002")
             # AMD — RADV (Vulkan) + AMDGPU kernel driver
             # Best GPU support on Chimera Linux
-            echo "radv|linux-firmware-amd|Recommended (full open-source support)"
+            echo "radv|firmware-linux-amdgpu|Recommended (full open-source support)"
             ;;
         "8086")
             # Intel — ANV (Vulkan) + i915/xe kernel driver
@@ -38,10 +38,10 @@ get_gpu_packages() {
 
     case "${vendor}" in
         nvidia)
-            echo "mesa mesa-dri vulkan-loader linux-firmware-nvidia"
+            echo "mesa mesa-dri vulkan-loader firmware-linux-nvidia"
             ;;
         amd)
-            echo "mesa mesa-dri vulkan-loader linux-firmware-amd"
+            echo "mesa mesa-dri vulkan-loader firmware-linux-amdgpu"
             ;;
         intel)
             echo "mesa mesa-dri vulkan-loader"
@@ -61,12 +61,12 @@ get_hybrid_gpu_recommendation() {
 
     case "${igpu}" in
         intel) pkgs="mesa mesa-dri vulkan-loader" ;;
-        amd)   pkgs="mesa mesa-dri vulkan-loader linux-firmware-amd" ;;
+        amd)   pkgs="mesa mesa-dri vulkan-loader firmware-linux-amdgpu" ;;
     esac
 
     case "${dgpu}" in
-        nvidia) pkgs+=" linux-firmware-nvidia" ;;
-        amd)    pkgs+=" linux-firmware-amd" ;;
+        nvidia) pkgs+=" firmware-linux-nvidia" ;;
+        amd)    pkgs+=" firmware-linux-amdgpu" ;;
     esac
 
     echo "${pkgs}"

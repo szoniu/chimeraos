@@ -191,8 +191,8 @@ kernel_install() {
             ;;
     esac
 
-    # Install firmware — try available firmware packages
-    apk_install_if_available linux-firmware
+    # Install firmware meta-package (pulls in hardware-specific firmware subpackages)
+    apk_install "Installing firmware" firmware-linux-meta
 
     # CPU microcode
     local ucode_pkg
