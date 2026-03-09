@@ -83,7 +83,7 @@ Bez poprawnej daty `git clone` moze nie dzialac (blad SSL "certificate is not ye
 
 ```bash
 doas -s
-apk add git
+apk add bash git
 git clone https://github.com/szoniu/chimeraos.git
 cd chimeraos
 ./install.sh
@@ -93,6 +93,7 @@ Albo bez git:
 
 ```bash
 doas -s
+apk add bash
 curl -L https://github.com/szoniu/chimeraos/archive/main.tar.gz | tar xz
 cd chimeraos-main
 ./install.sh
