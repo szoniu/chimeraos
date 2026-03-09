@@ -98,10 +98,7 @@ disk_plan_auto() {
     # LUKS encryption
     if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
         LUKS_PARTITION="${ROOT_PARTITION}"
-        disk_plan_add "Setup LUKS encryption on ${ROOT_PARTITION}" \
-            cryptsetup luksFormat --batch-mode "${ROOT_PARTITION}"
-        disk_plan_add "Open LUKS partition" \
-            cryptsetup luksOpen "${ROOT_PARTITION}" cryptroot
+        _plan_luks_setup "${ROOT_PARTITION}"
         ROOT_PARTITION="/dev/mapper/cryptroot"
     fi
 
@@ -158,10 +155,7 @@ disk_plan_dualboot() {
     # LUKS encryption
     if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
         LUKS_PARTITION="${ROOT_PARTITION}"
-        disk_plan_add "Setup LUKS encryption on ${ROOT_PARTITION}" \
-            cryptsetup luksFormat --batch-mode "${ROOT_PARTITION}"
-        disk_plan_add "Open LUKS partition" \
-            cryptsetup luksOpen "${ROOT_PARTITION}" cryptroot
+        _plan_luks_setup "${ROOT_PARTITION}"
         ROOT_PARTITION="/dev/mapper/cryptroot"
     fi
 
@@ -337,6 +331,35 @@ disk_plan_shrink() {
     # Re-read partition table
     disk_plan_add "Re-read partition table on ${disk}" \
         partprobe "${disk}"
+}
+
+# --- LUKS helpers ---
+
+# _plan_luks_setup — Add LUKS setup actions to plan, skipping luksFormat if already formatted
+_plan_luks_setup() {
+    local part="$1"
+
+    if [[ "${DRY_RUN:-0}" == "1" ]]; then
+        disk_plan_add "Setup LUKS encryption on ${part}" \
+            bash -c "echo '[DRY-RUN] Would setup LUKS on ${part}'"
+        return 0
+    fi
+
+    # Check if partition already has LUKS
+    local current_type
+    current_type=$(blkid -s TYPE -o value "${part}" 2>/dev/null) || true
+
+    if [[ "${current_type}" == "crypto_LUKS" ]]; then
+        einfo "Partition ${part} already has LUKS — skipping luksFormat"
+        # Just open the existing container
+        disk_plan_add "Open existing LUKS partition ${part}" \
+            bash -c "if [ -b /dev/mapper/cryptroot ]; then echo 'LUKS already open'; else cryptsetup luksOpen '${part}' cryptroot; fi"
+    else
+        disk_plan_add "Setup LUKS encryption on ${part}" \
+            cryptsetup luksFormat --batch-mode "${part}"
+        disk_plan_add "Open LUKS partition" \
+            cryptsetup luksOpen "${part}" cryptroot
+    fi
 }
 
 # --- Phase 2: Execution ---
