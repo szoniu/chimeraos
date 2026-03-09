@@ -360,6 +360,12 @@ cleanup_target_disk() {
         swapoff "${swap_part}" 2>/dev/null && einfo "Deactivated swap: ${swap_part}" || true
     done < <(awk -v disk="${disk}" 'NR>1 && $1 ~ "^"disk"[p]?[0-9]" {print $1}' /proc/swaps 2>/dev/null)
 
+    # Unmount /dev/mapper/* (LUKS containers) before unmounting raw partitions
+    if [[ -b /dev/mapper/cryptroot ]]; then
+        umount -l /dev/mapper/cryptroot 2>/dev/null && einfo "Unmounted: /dev/mapper/cryptroot" || true
+        cryptsetup luksClose cryptroot 2>/dev/null && einfo "Closed LUKS: cryptroot" || true
+    fi
+
     # Unmount all partitions on this disk (reverse order for nested mounts)
     local -a mounts
     readarray -t mounts < <(awk -v disk="${disk}" '$1 ~ "^"disk"[p]?[0-9]" {print $2}' /proc/mounts 2>/dev/null | sort -r)
