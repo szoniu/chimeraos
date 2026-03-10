@@ -71,6 +71,7 @@ readonly -a CONFIG_VARS=(
     SWAP_TYPE
     SWAP_SIZE_MIB
     HOSTNAME
+    LOCALE
     TIMEZONE
     KEYMAP
     KERNEL_TYPE

@@ -688,6 +688,33 @@ _infer_from_keymap() {
     fi
 }
 
+# _infer_from_locale — Read LANG from locale.conf or profile.d
+_infer_from_locale() {
+    local mp="$1"
+
+    # /etc/locale.conf
+    if [[ -f "${mp}/etc/locale.conf" ]]; then
+        local lang
+        lang=$(sed -n 's/^LANG=\(.*\)/\1/p' "${mp}/etc/locale.conf" | head -1) || true
+        if [[ -n "${lang}" ]]; then
+            LOCALE="${lang}"
+            export LOCALE
+            return 0
+        fi
+    fi
+
+    # Fallback: /etc/profile.d/locale.sh
+    if [[ -f "${mp}/etc/profile.d/locale.sh" ]]; then
+        local lang
+        lang=$(sed -n 's/^export LANG=\(.*\)/\1/p' "${mp}/etc/profile.d/locale.sh" | head -1) || true
+        if [[ -n "${lang}" ]]; then
+            LOCALE="${lang}"
+            export LOCALE
+            return 0
+        fi
+    fi
+}
+
 # _infer_swap_type — Detect swap type if fstab didn't have swap partition
 _infer_swap_type() {
     local mp="$1"
@@ -795,6 +822,7 @@ infer_config_from_partition() {
     # Run all inference helpers (each is defensive — missing file = skip)
     _infer_from_fstab "${mp}"
     _infer_from_hostname "${mp}"
+    _infer_from_locale "${mp}"
     _infer_from_timezone "${mp}"
     _infer_from_keymap "${mp}"
     _infer_swap_type "${mp}"

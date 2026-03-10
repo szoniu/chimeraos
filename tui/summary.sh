@@ -23,6 +23,7 @@ screen_summary() {
     summary+="\n"
     summary+="\n"
     summary+="Hostname:     ${HOSTNAME:-chimera}\n"
+    summary+="Language:     ${LOCALE:-en_US.UTF-8}\n"
     summary+="Timezone:     ${TIMEZONE:-UTC}\n"
     summary+="Keymap:       ${KEYMAP:-us}\n"
     summary+="\n"

@@ -27,6 +27,9 @@ desktop_install() {
     # Enable display manager
     _enable_display_manager
 
+    # Install KDE language packs
+    _install_kde_lang
+
     # Configure Plasma defaults
     _configure_plasma
 
@@ -97,6 +100,34 @@ _install_intel_drivers() {
     einfo "Intel GPU drivers installed (ANV Vulkan)"
 }
 
+# _install_kde_lang — Install KDE/Plasma language packs for the selected locale
+_install_kde_lang() {
+    local locale="${LOCALE:-en_US.UTF-8}"
+    local lang="${locale%%_*}"  # e.g., pl_PL.UTF-8 -> pl
+
+    if [[ "${lang}" == "en" ]]; then
+        einfo "English locale — no extra language packs needed"
+        return 0
+    fi
+
+    einfo "Installing KDE language packs for: ${lang}"
+
+    # Core Plasma and KDE Frameworks language packs
+    local -a lang_pkgs=(
+        plasma-desktop-lang
+        plasma-workspace-lang
+        kf6-ki18n-lang
+        konsole-lang
+        dolphin-lang
+        sddm-lang
+    )
+
+    local pkg
+    for pkg in "${lang_pkgs[@]}"; do
+        apk_install_if_available "${pkg}"
+    done
+}
+
 # _install_pipewire — Install PipeWire audio system
 _install_pipewire() {
     einfo "Installing PipeWire audio..."
@@ -149,6 +180,20 @@ Current=breeze
 [General]
 InputMethod=
 SDDMEOF"
+
+    # Set Plasma language for all new users via skel
+    local locale="${LOCALE:-en_US.UTF-8}"
+    local lang="${locale%%_*}"  # e.g., pl
+    if [[ "${lang}" != "en" ]]; then
+        chroot_exec "mkdir -p /etc/skel/.config"
+        chroot_exec "cat > /etc/skel/.config/plasma-localerc << PLEOF
+[Formats]
+LANG=${locale}
+
+[Translations]
+LANGUAGE=${lang}
+PLEOF"
+    fi
 
     # Ensure dbus is available (should be part of base)
     try "Enabling dbus" \

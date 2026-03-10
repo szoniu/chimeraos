@@ -18,6 +18,29 @@ system_set_timezone() {
     fi
 }
 
+# --- Locale ---
+
+system_set_locale() {
+    local locale="${LOCALE:-en_US.UTF-8}"
+    einfo "Setting locale: ${locale}"
+
+    # /etc/locale.conf — read by SDDM, elogind, and PAM
+    chroot_exec "cat > /etc/locale.conf << LOCEOF
+LANG=${locale}
+LOCEOF"
+
+    # /etc/profile.d/locale.sh — fallback for console/SSH sessions (dinit doesn't read locale.conf)
+    chroot_exec "mkdir -p /etc/profile.d"
+    chroot_exec "cat > /etc/profile.d/locale.sh << LOCEOF
+export LANG=${locale}
+LOCEOF"
+
+    # Install musl-locales for locale data (musl has minimal built-in locale support)
+    apk_install_if_available musl-locales
+
+    einfo "Locale set to ${locale}"
+}
+
 # --- Hostname ---
 
 system_set_hostname() {

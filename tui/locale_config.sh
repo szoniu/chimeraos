@@ -1,8 +1,31 @@
 #!/usr/bin/env bash
-# tui/locale_config.sh — Timezone + keymap configuration
+# tui/locale_config.sh — Language, timezone + keymap configuration
 source "${LIB_DIR}/protection.sh"
 
 screen_locale_config() {
+    # System language / locale
+    local locale
+    locale=$(dialog_menu "System Language" \
+        "en_US.UTF-8"  "English (US)" \
+        "pl_PL.UTF-8"  "Polish" \
+        "de_DE.UTF-8"  "German" \
+        "fr_FR.UTF-8"  "French" \
+        "en_GB.UTF-8"  "English (UK)" \
+        "es_ES.UTF-8"  "Spanish" \
+        "it_IT.UTF-8"  "Italian" \
+        "pt_PT.UTF-8"  "Portuguese" \
+        "ru_RU.UTF-8"  "Russian" \
+        "cs_CZ.UTF-8"  "Czech" \
+        "nl_NL.UTF-8"  "Dutch" \
+        "sv_SE.UTF-8"  "Swedish" \
+        "ja_JP.UTF-8"  "Japanese" \
+        "zh_CN.UTF-8"  "Chinese (Simplified)" \
+        "ko_KR.UTF-8"  "Korean") \
+        || return "${TUI_BACK}"
+
+    LOCALE="${locale}"
+    export LOCALE
+
     # Timezone
     local tz
     tz=$(dialog_inputbox "Timezone" \
@@ -38,6 +61,6 @@ Common timezones:\n\
     KEYMAP="${keymap}"
     export KEYMAP
 
-    einfo "Timezone: ${TIMEZONE}, Keymap: ${KEYMAP}"
+    einfo "Language: ${LOCALE}, Timezone: ${TIMEZONE}, Keymap: ${KEYMAP}"
     return "${TUI_NEXT}"
 }

@@ -229,6 +229,7 @@ _execute_phase() {
             generate_crypttab
             ;;
         system_config)
+            system_set_locale
             system_set_timezone
             system_set_hostname
             system_set_keymap
