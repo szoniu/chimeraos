@@ -407,3 +407,29 @@ Installer automatycznie uzyje `dialog` lub `whiptail` jako fallback. Mozesz tez 
 
 **P: Jak wrócic do poprzedniej konfiguracji?**
 Jesli uzywasz btrfs — mozesz uzyc snapshotow. W przeciwnym razie warto robic backup.
+
+**P: Mam multi-boot (kilka Linuxów). Po aktualizacji kernela inne systemy zniknęły z GRUB.**
+Ostatni zainstalowany GRUB jest master bootloaderem. Po aktualizacji kernela w dowolnym systemie trzeba odświeżyć GRUB:
+
+```bash
+doas grub-mkconfig -o /boot/grub/grub.cfg
+```
+
+Wystarczy uruchomić z dowolnego systemu, który ma GRUB + os-prober. Jeśli używasz `~/dotfiles` aktualizatora, robi to automatycznie.
+
+**P: Zapomniałem odświeżyć GRUB i po restarcie nie widzę innych systemów.**
+Systemy dalej są na dysku — nic nie zostało usunięte. Wystarczy:
+
+1. Uruchom dowolny z widocznych systemów
+2. Upewnij się że `os-prober` jest zainstalowany (`apk add os-prober`)
+3. Uruchom `doas grub-mkconfig -o /boot/grub/grub.cfg`
+4. Restart — wszystkie systemy powinny być widoczne
+
+Jeśli żaden system nie startuje (uszkodzony GRUB), boot z Live USB i napraw z chroot:
+
+```bash
+mount /dev/<root-partycja> /mnt
+mount /dev/<esp> /mnt/boot/efi
+mount --rbind /dev /mnt/dev && mount --rbind /sys /mnt/sys && mount -t proc /proc /mnt/proc
+chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+```
