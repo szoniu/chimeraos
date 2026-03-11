@@ -16,17 +16,21 @@ bootstrap_install() {
     if [[ -d "${MOUNTPOINT}" ]] && [[ -n "$(ls -A "${MOUNTPOINT}" 2>/dev/null)" ]]; then
         ewarn "Target directory ${MOUNTPOINT} is not empty — cleaning up"
 
-        # Unmount any nested mounts (ESP, btrfs subvols) before cleaning
+        # Unmount nested mounts EXCEPT ESP (needed for bootloader later)
         local -a nested_mounts
-        readarray -t nested_mounts < <(awk -v mp="${MOUNTPOINT}" '$2 ~ "^"mp"/" {print $2}' /proc/mounts 2>/dev/null | sort -r)
+        readarray -t nested_mounts < <(awk -v mp="${MOUNTPOINT}" \
+            '$2 ~ "^"mp"/" && $2 !~ "^"mp"/boot/efi$" && $2 !~ "^"mp"/efi$" && $2 !~ "^"mp"/boot$" {print $2}' \
+            /proc/mounts 2>/dev/null | sort -r)
         local m
         for m in "${nested_mounts[@]}"; do
             [[ -z "${m}" ]] && continue
             umount -l "${m}" 2>/dev/null || true
         done
 
-        # Remove contents but keep the mount point itself
-        find "${MOUNTPOINT}" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+        # Remove contents but keep the mount point, ESP, and lost+found
+        find "${MOUNTPOINT}" -mindepth 1 -maxdepth 1 \
+            ! -name 'efi' ! -name 'boot' ! -name 'lost+found' \
+            -exec rm -rf {} + 2>/dev/null || true
     fi
 
     # chimera-bootstrap installs base-full by default
@@ -38,6 +42,16 @@ bootstrap_install() {
     else
         try "Bootstrap Chimera Linux (local/offline)" \
             chimera-bootstrap -l "${MOUNTPOINT}"
+    fi
+
+    # Re-mount ESP if it was unmounted during cleanup
+    if [[ -n "${ESP_PARTITION:-}" ]]; then
+        local esp_path="${MOUNTPOINT}/boot/efi"
+        [[ "${BOOTLOADER_TYPE:-grub}" == "systemd-boot" ]] && esp_path="${MOUNTPOINT}/boot"
+        mkdir -p "${esp_path}"
+        if ! mountpoint -q "${esp_path}" 2>/dev/null; then
+            mount "${ESP_PARTITION}" "${esp_path}" 2>/dev/null || true
+        fi
     fi
 
     einfo "Base system installed to ${MOUNTPOINT}"
