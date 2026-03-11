@@ -62,6 +62,7 @@ readonly -a CHECKPOINTS=(
 
 # Configuration variable names (for save/load)
 readonly -a CONFIG_VARS=(
+    DESKTOP_ENV
     TARGET_DISK
     PARTITION_SCHEME
     FILESYSTEM

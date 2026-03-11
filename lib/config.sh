@@ -175,6 +175,11 @@ validate_config() {
         errors+=("GPU_VENDOR='${GPU_VENDOR}' — must be nvidia, amd, intel, none, or unknown")
     fi
 
+    if [[ -n "${DESKTOP_ENV:-}" ]] && \
+       [[ "${DESKTOP_ENV}" != "kde" && "${DESKTOP_ENV}" != "gnome" ]]; then
+        errors+=("DESKTOP_ENV='${DESKTOP_ENV}' — must be kde or gnome")
+    fi
+
     # --- Format validation ---
     # Hostname: RFC 1123
     if [[ -n "${HOSTNAME:-}" ]] && \

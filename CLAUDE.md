@@ -2,7 +2,7 @@
 
 ## Co to jest
 
-Interaktywny TUI installer Chimera Linux w Bashu. Cel: boot z Chimera Linux Live ISO, sklonowac repo, `./install.sh` — i dostac dzialajacy desktop KDE Plasma 6.
+Interaktywny TUI installer Chimera Linux w Bashu. Cel: boot z Chimera Linux Live ISO (Base, Plasma lub GNOME), sklonowac repo, `./install.sh` — i dostac dzialajacy desktop KDE Plasma 6 lub GNOME.
 
 Chimera Linux to:
 - **musl libc** (nie glibc)
@@ -42,7 +42,7 @@ lib/
 ├── chroot.sh           — chimera-chroot wrapper, bind mounts, DNS
 ├── system.sh           — timezone, hostname, keymap, fstab, kernel, networking, users
 ├── bootloader.sh       — GRUB (x86_64-efi) lub systemd-boot
-├── desktop.sh          — KDE Plasma, SDDM, PipeWire, GPU drivers, extras
+├── desktop.sh          — KDE Plasma / GNOME, SDDM/GDM, PipeWire, GPU drivers, extras
 ├── swap.sh             — zram (dinit service), swap partition
 ├── hooks.sh            — maybe_exec 'before_X' / 'after_X'
 └── preset.sh           — preset_export/import (hardware overlay)
@@ -59,7 +59,7 @@ tui/
 ├── bootloader_select.sh — GRUB vs systemd-boot
 ├── kernel_select.sh    — lts/stable
 ├── gpu_config.sh       — AMD(radv)/Intel(anv)/NVIDIA(nvk) — all open-source, hybrid GPU display
-├── desktop_config.sh   — KDE apps + flatpak/printing/bluetooth toggles
+├── desktop_config.sh   — KDE/GNOME wybor + apps + flatpak/printing/bluetooth toggles
 ├── user_config.sh      — root pwd, user, grupy, SSH
 ├── extra_packages.sh   — checklist (extras + conditional hw items) + wolne pole apk packages
 ├── preset_save.sh      — eksport

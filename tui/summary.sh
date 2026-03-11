@@ -43,8 +43,12 @@ screen_summary() {
     summary+="\n"
     summary+="Username:     ${USERNAME:-user}\n"
     summary+="SSH:          ${ENABLE_SSH:-no}\n"
-    summary+="Desktop:      KDE Plasma + SDDM + PipeWire\n"
-    [[ -n "${DESKTOP_EXTRAS:-}" ]] && summary+="KDE apps:     ${DESKTOP_EXTRAS}\n"
+    if [[ "${DESKTOP_ENV:-kde}" == "gnome" ]]; then
+        summary+="Desktop:      GNOME + GDM + PipeWire\n"
+    else
+        summary+="Desktop:      KDE Plasma + SDDM + PipeWire\n"
+    fi
+    [[ -n "${DESKTOP_EXTRAS:-}" ]] && summary+="Apps:         ${DESKTOP_EXTRAS}\n"
     [[ "${ENABLE_FLATPAK:-no}" == "yes" ]] && summary+="Flatpak:      yes\n"
     [[ "${ENABLE_PRINTING:-no}" == "yes" ]] && summary+="Printing:     yes\n"
     [[ "${ENABLE_BLUETOOTH:-no}" == "yes" ]] && summary+="Bluetooth:    yes\n"

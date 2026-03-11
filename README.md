@@ -1,8 +1,8 @@
 # Chimera Linux TUI Installer
 
-Interaktywny installer Chimera Linux z interfejsem TUI (dialog). Przeprowadza za reke przez caly proces instalacji — od partycjonowania dysku po dzialajacy desktop KDE Plasma 6.
+Interaktywny installer Chimera Linux z interfejsem TUI (dialog). Przeprowadza za reke przez caly proces instalacji — od partycjonowania dysku po dzialajacy desktop KDE Plasma 6 lub GNOME.
 
-Chimera Linux: musl libc + LLVM/Clang + dinit + apk + FreeBSD coreutils. Binarne paczki, instalacja w ~15-30 minut.
+Chimera Linux: musl libc + LLVM/Clang + dinit + apk + FreeBSD coreutils. Binarne paczki, instalacja w ~15-30 minut. Obsluguje wszystkie trzy oficjalne obrazy ISO: Base, Plasma i GNOME.
 
 ## Krok po kroku
 
@@ -10,7 +10,7 @@ Chimera Linux: musl libc + LLVM/Clang + dinit + apk + FreeBSD coreutils. Binarne
 
 Pobierz Chimera Linux ISO:
 
-- https://chimera-linux.org/download/ -> **GNOME Desktop** lub **Base**
+- https://chimera-linux.org/download/ -> **GNOME Desktop**, **KDE Plasma** lub **Base**
 
 Nagraj na pendrive:
 
@@ -101,7 +101,7 @@ cd chimeraos-main
 
 ### 6. Po instalacji
 
-Wyjmij pendrive, reboot. Zobaczysz bootloader (GRUB lub systemd-boot), potem SDDM z KDE Plasma 6.
+Wyjmij pendrive, reboot. Zobaczysz bootloader (GRUB lub systemd-boot), potem SDDM (KDE) lub GDM (GNOME).
 
 Po zalogowaniu mozesz instalowac paczki:
 
@@ -151,7 +151,7 @@ doas apk add pakiet
 | 9 | Bootloader | GRUB / systemd-boot |
 | 10 | Kernel | LTS / Stable |
 | 11 | GPU | AMD (RADV) / Intel (ANV) / NVIDIA (NVK, open-source) |
-| 12 | Desktop | KDE Plasma 6 + aplikacje + Flatpak/drukowanie/Bluetooth |
+| 12 | Desktop | KDE Plasma 6 / GNOME + aplikacje + Flatpak/drukowanie/Bluetooth |
 | 13 | Uzytkownicy | Root, user, grupy, SSH |
 | 14 | Pakiety | Dodatkowe pakiety apk + opcje sprzetowe (fingerprint, Thunderbolt, itp.) |
 | 15 | Preset save | Eksport konfiguracji |
@@ -161,9 +161,9 @@ Po potwierdzeniu installer:
 1. Partycjonuje dysk (opcjonalnie z LUKS)
 2. Uruchamia `chimera-bootstrap` (instalacja bazowa)
 3. Wchodzi do chroota (`chimera-chroot`)
-4. Instaluje kernel, bootloader, KDE Plasma
+4. Instaluje kernel, bootloader, KDE Plasma lub GNOME
 5. Konfiguruje system (timezone, hostname, uzytkownicy)
-6. Wlacza uslugi dinit (SDDM, NetworkManager, etc.)
+6. Wlacza uslugi dinit (SDDM/GDM, NetworkManager, etc.)
 
 ## Dual-boot z Windows/Linux
 
