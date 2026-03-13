@@ -280,6 +280,21 @@ _install_extras() {
     _install_printing
 }
 
+# install_hyprland_ecosystem — Hyprland + waybar, wofi, mako, grim, slurp, wl-clipboard, brightnessctl
+install_hyprland_ecosystem() {
+    if [[ "${ENABLE_HYPRLAND:-no}" != "yes" ]]; then
+        return 0
+    fi
+    einfo "Installing Hyprland ecosystem..."
+    local -a pkgs=(hyprland hyprpaper hypridle hyprlock
+        waybar wofi mako grim slurp wl-clipboard brightnessctl)
+    local pkg
+    for pkg in "${pkgs[@]}"; do
+        apk_install_if_available "${pkg}"
+    done
+    einfo "Hyprland ecosystem installed"
+}
+
 # install_extra_packages — Install user-specified extra packages
 install_extra_packages() {
     if [[ -n "${EXTRA_PACKAGES:-}" ]]; then

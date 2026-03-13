@@ -10,6 +10,7 @@ _extra_pkg_state() {
         return
     fi
     case "${pkg}" in
+        hyprland-ecosystem) [[ "${ENABLE_HYPRLAND:-no}" == "yes" ]] && echo "on" && return ;;
         fprintd)           [[ "${ENABLE_FINGERPRINT:-no}" == "yes" ]] && echo "on" && return ;;
         bolt)              [[ "${ENABLE_THUNDERBOLT:-no}" == "yes" ]] && echo "on" && return ;;
         iio-sensor-proxy)  [[ "${ENABLE_SENSORS:-no}" == "yes" ]] && echo "on" && return ;;
@@ -31,6 +32,9 @@ screen_extra_packages() {
     items+=("tmux"        "Terminal multiplexer"       "$(_extra_pkg_state tmux off)")
     items+=("v4l-utils"   "Video4Linux utilities"      "$(_extra_pkg_state v4l-utils off)")
 
+    # --- Hyprland ecosystem ---
+    items+=("hyprland-ecosystem" "Hyprland + ekosystem (waybar, wofi, mako...)" "$(_extra_pkg_state hyprland-ecosystem off)")
+
     # --- Conditional items (hardware-detected) ---
     if [[ "${FINGERPRINT_DETECTED:-0}" == "1" ]]; then
         items+=("fprintd"  "Fingerprint authentication" "$(_extra_pkg_state fprintd off)")
@@ -50,6 +54,7 @@ screen_extra_packages() {
         || return "${TUI_BACK}"
 
     # Process selected items — set ENABLE_* flags
+    ENABLE_HYPRLAND="no"
     ENABLE_FINGERPRINT="no"
     ENABLE_THUNDERBOLT="no"
     ENABLE_SENSORS="no"
@@ -58,25 +63,26 @@ screen_extra_packages() {
     local pkg
     for pkg in ${selected}; do
         case "${pkg}" in
+            hyprland-ecosystem) ENABLE_HYPRLAND="yes" ;;
             fprintd)           ENABLE_FINGERPRINT="yes" ;;
             bolt)              ENABLE_THUNDERBOLT="yes" ;;
             iio-sensor-proxy)  ENABLE_SENSORS="yes" ;;
             ModemManager)      ENABLE_WWAN="yes" ;;
         esac
     done
-    export ENABLE_FINGERPRINT ENABLE_THUNDERBOLT ENABLE_SENSORS ENABLE_WWAN
+    export ENABLE_HYPRLAND ENABLE_FINGERPRINT ENABLE_THUNDERBOLT ENABLE_SENSORS ENABLE_WWAN
 
     # Build EXTRA_PACKAGES from non-special items
     local -a extra_pkgs=()
     for pkg in ${selected}; do
         case "${pkg}" in
-            fprintd|bolt|iio-sensor-proxy|ModemManager) ;;
+            hyprland-ecosystem|fprintd|bolt|iio-sensor-proxy|ModemManager) ;;
             *) extra_pkgs+=("${pkg}") ;;
         esac
     done
 
     # Collect any preset EXTRA_PACKAGES not in the checklist above
-    local _known_pkgs="fastfetch btop htop kitty vim git tmux v4l-utils fprintd bolt iio-sensor-proxy ModemManager"
+    local _known_pkgs="fastfetch btop htop kitty vim git tmux v4l-utils hyprland-ecosystem fprintd bolt iio-sensor-proxy ModemManager"
     local _preset_extra=""
     local _ep
     for _ep in ${EXTRA_PACKAGES:-}; do
