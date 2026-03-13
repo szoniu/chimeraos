@@ -153,7 +153,7 @@ doas apk add pakiet
 | 11 | GPU | AMD (RADV) / Intel (ANV) / NVIDIA (NVK, open-source) |
 | 12 | Desktop | KDE Plasma 6 / GNOME + aplikacje + Flatpak/drukowanie/Bluetooth |
 | 13 | Uzytkownicy | Root, user, grupy, SSH |
-| 14 | Pakiety | Dodatkowe pakiety apk + opcje sprzetowe (fingerprint, Thunderbolt, itp.) |
+| 14 | Pakiety | Dodatkowe pakiety apk + Hyprland ecosystem + opcje sprzetowe (fingerprint, Thunderbolt, itp.) |
 | 15 | Preset save | Eksport konfiguracji |
 | 16 | Podsumowanie | Przeglad + potwierdzenie YES + countdown |
 

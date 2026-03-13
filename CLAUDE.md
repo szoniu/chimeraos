@@ -193,7 +193,28 @@ THUNDERBOLT_DETECTED, ENABLE_THUNDERBOLT, SENSORS_DETECTED, ENABLE_SENSORS
 WEBCAM_DETECTED, WWAN_DETECTED, ENABLE_WWAN
 WINDOWS_DETECTED, LINUX_DETECTED, DETECTED_OSES_SERIALIZED
 SHRINK_PARTITION, SHRINK_PARTITION_FSTYPE, SHRINK_NEW_SIZE_MIB
+ENABLE_HYPRLAND, DESKTOP_TYPE, LOCALE, LANG
 ```
+
+### Hyprland Ecosystem (lib/desktop.sh)
+
+`install_hyprland_ecosystem()` — opcja w `tui/extra_packages.sh`. Gdy `ENABLE_HYPRLAND=yes`:
+- Używa `apk_install_if_available` dla: hyprland hyprpaper hypridle hyprlock waybar wofi mako grim slurp wl-clipboard brightnessctl
+- Wywoływana z `tui/progress.sh` w fazie extras
+
+### GNOME Desktop Support (lib/desktop.sh)
+
+`DESKTOP_TYPE` może być `plasma` lub `gnome`:
+- `_install_gnome()` — GNOME Shell, GDM, Nautilus, GNOME apps
+- GDM jako display manager (dinit service)
+- Alternatywa dla KDE Plasma
+
+### Locale / Language Support (lib/system.sh)
+
+Obsługa locale i pakietów językowych:
+- `LANG` ustawiane w `/etc/locale.conf`
+- KDE: instalacja pakietów językowych (`kde-l10n-*`)
+- Plasma: konfiguracja języka w `kdeglobals`
 
 ## Testy
 
