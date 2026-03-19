@@ -103,7 +103,13 @@ cd chimeraos-main
 
 Wyjmij pendrive, reboot. Zobaczysz bootloader (GRUB lub systemd-boot), potem SDDM (KDE) lub GDM (GNOME).
 
-Po zalogowaniu mozesz instalowac paczki:
+Po zalogowaniu — aktualizacja systemu i pakietów:
+
+```bash
+doas apk upgrade
+```
+
+Instalacja nowych pakietów:
 
 ```bash
 doas apk add pakiet
