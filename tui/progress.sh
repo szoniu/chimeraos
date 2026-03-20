@@ -252,6 +252,7 @@ _execute_phase() {
         extras)
             install_extra_packages
             install_hyprland_ecosystem
+            install_gaming
             install_fingerprint_tools
             install_thunderbolt_tools
             install_sensor_tools

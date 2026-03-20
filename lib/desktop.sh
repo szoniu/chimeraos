@@ -330,12 +330,51 @@ install_hyprland_ecosystem() {
     fi
     einfo "Installing Hyprland ecosystem..."
     local -a pkgs=(hyprland hyprpaper hypridle hyprlock
-        waybar wofi mako grim slurp wl-clipboard brightnessctl)
+        waybar wofi mako grim slurp wl-clipboard brightnessctl
+        xdg-desktop-portal-hyprland)
     local pkg
     for pkg in "${pkgs[@]}"; do
         apk_install_if_available "${pkg}"
     done
+
+    # Ensure Hyprland session file exists for GDM/SDDM session selector
+    if ! chroot_exec "test -f /usr/share/wayland-sessions/hyprland.desktop" 2>/dev/null; then
+        einfo "Creating Hyprland session file for display manager..."
+        chroot_exec "mkdir -p /usr/share/wayland-sessions"
+        chroot_exec "cat > /usr/share/wayland-sessions/hyprland.desktop << 'HYPREOF'
+[Desktop Entry]
+Name=Hyprland
+Comment=An intelligent dynamic tiling Wayland compositor
+Exec=Hyprland
+Type=Application
+DesktopNames=Hyprland
+HYPREOF"
+    fi
+
     einfo "Hyprland ecosystem installed"
+}
+
+# install_gaming — Gaming support (Steam via Flatpak, gamescope, controller udev rules)
+install_gaming() {
+    if [[ "${ENABLE_GAMING:-no}" != "yes" ]]; then
+        return 0
+    fi
+    einfo "Installing gaming support..."
+
+    # Enable user repo (gamescope, steam-devices-udev are in chimera-repo-user)
+    enable_user_repo
+
+    apk_install_if_available steam-devices-udev
+    apk_install_if_available gamescope
+    apk_install_if_available gcompat
+
+    # Steam via Flatpak (native Steam not available on musl)
+    if [[ "${ENABLE_FLATPAK:-no}" == "yes" ]]; then
+        einfo "Steam will be available via Flatpak after first login:"
+        einfo "  flatpak install flathub com.valvesoftware.Steam"
+    fi
+
+    einfo "Gaming support installed"
 }
 
 # install_extra_packages — Install user-specified extra packages
