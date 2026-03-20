@@ -131,7 +131,12 @@ _install_gnome() {
     apk_install "Installing GNOME" gnome
     apk_install "Installing GDM" gdm
 
+    # dconf + accountsservice needed for locale/session configuration
+    apk_install_if_available dconf
+    apk_install_if_available accountsservice
+
     _install_gnome_apps
+    _install_gnome_lang
 
     # Enable GDM
     try "Enabling GDM" \
@@ -154,6 +159,37 @@ _install_gnome_apps() {
             apk_install_if_available "${pkg}"
         done
     fi
+}
+
+# _install_gnome_lang — Install GNOME language packs for the selected locale
+_install_gnome_lang() {
+    local locale="${LOCALE:-en_US.UTF-8}"
+    local lang="${locale%%_*}"
+
+    if [[ "${lang}" == "en" ]]; then
+        einfo "English locale — no extra language packs needed"
+        return 0
+    fi
+
+    einfo "Installing GNOME language packs for: ${lang}"
+
+    local -a lang_pkgs=(
+        gnome-shell-lang
+        glib-lang
+        gtk4-lang
+        nautilus-lang
+        gnome-control-center-lang
+        gnome-console-lang
+        gnome-text-editor-lang
+        gdm-lang
+        gsettings-desktop-schemas-lang
+        evince-lang
+    )
+
+    local pkg
+    for pkg in "${lang_pkgs[@]}"; do
+        apk_install_if_available "${pkg}"
+    done
 }
 
 # _configure_gnome — Set up GNOME defaults
@@ -182,8 +218,15 @@ DCONFEOF"
         chroot_exec "cat > /etc/dconf/db/local.d/00-locale << LOCEOF
 [system/locale]
 region='${locale}'
+format-locale='${locale}'
 LOCEOF"
         chroot_exec "dconf update" 2>/dev/null || true
+
+        # GNOME language for new users via skel (mirrors KDE plasma-localerc approach)
+        chroot_exec "mkdir -p /etc/skel/.config"
+        chroot_exec "cat > /etc/skel/.config/gnome-initial-setup-done << 'GISEOF'
+yes
+GISEOF"
     fi
 
     einfo "GNOME defaults configured"

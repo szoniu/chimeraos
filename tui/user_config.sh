@@ -30,13 +30,24 @@ screen_user_config() {
 
     # Username
     local username
-    username=$(dialog_inputbox "Create User" \
-        "Enter the username for your regular user account:" \
-        "${USERNAME:-user}") || return "${TUI_BACK}"
+    while true; do
+        username=$(dialog_inputbox "Create User" \
+            "Enter the username for your regular user account:" \
+            "${USERNAME:-user}") || return "${TUI_BACK}"
 
-    if [[ -z "${username}" ]]; then
-        username="user"
-    fi
+        if [[ -z "${username}" ]]; then
+            username="user"
+        fi
+
+        # Validate: POSIX username — lowercase, digits, underscore, hyphen; max 32 chars
+        if [[ ! "${username}" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+            dialog_msgbox "Invalid Username" \
+                "Username must start with a lowercase letter or underscore,\ncontain only lowercase letters, digits, underscores, hyphens,\nand be at most 32 characters long.\n\nYou entered: '${username}'"
+            continue
+        fi
+
+        break
+    done
 
     USERNAME="${username}"
     export USERNAME

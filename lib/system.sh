@@ -224,6 +224,11 @@ kernel_install() {
         apk_install "Installing CPU microcode" "${ucode_pkg}"
     fi
 
+    # cryptsetup-scripts: required for initramfs to pick up /etc/crypttab (LUKS boot)
+    if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
+        apk_install "Installing cryptsetup scripts" cryptsetup-scripts
+    fi
+
     # Generate initramfs
     try "Generating initramfs" \
         chroot_exec "update-initramfs -c -k all"

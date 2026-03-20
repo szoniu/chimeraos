@@ -868,6 +868,10 @@ get_cpu_count() {
 # generate_password_hash — Create SHA-512 password hash
 generate_password_hash() {
     local password="$1"
-    openssl passwd -6 -stdin <<< "${password}" 2>/dev/null || \
-    CHIMERA_PW="${password}" python3 -c "import crypt, os; print(crypt.crypt(os.environ['CHIMERA_PW'], crypt.mksalt(crypt.METHOD_SHA512)))" 2>/dev/null
+    local hash
+
+    hash=$(LC_ALL=C.UTF-8 openssl passwd -6 -stdin <<< "${password}" 2>/dev/null) && [[ -n "${hash}" ]] && { echo "${hash}"; return 0; }
+    hash=$(LC_ALL=C.UTF-8 CHIMERA_PW="${password}" python3 -c "import crypt, os; print(crypt.crypt(os.environ['CHIMERA_PW'], crypt.mksalt(crypt.METHOD_SHA512)))" 2>/dev/null) && [[ -n "${hash}" ]] && { echo "${hash}"; return 0; }
+
+    die "Cannot generate password hash — neither openssl nor python3 available"
 }

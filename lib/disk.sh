@@ -319,7 +319,7 @@ disk_plan_shrink() {
             ;;
         btrfs)
             disk_plan_add "Shrink btrfs filesystem on ${part}" \
-                bash -c "mount ${part} /mnt/chimera-shrink-tmp && btrfs filesystem resize ${new_size}M /mnt/chimera-shrink-tmp && umount /mnt/chimera-shrink-tmp"
+                bash -c "mkdir -p /mnt/chimera-shrink-tmp && mount ${part} /mnt/chimera-shrink-tmp && btrfs filesystem resize ${new_size}M /mnt/chimera-shrink-tmp; rc=\$?; umount /mnt/chimera-shrink-tmp 2>/dev/null; rmdir /mnt/chimera-shrink-tmp 2>/dev/null; exit \$rc"
             ;;
     esac
 
@@ -355,8 +355,14 @@ _plan_luks_setup() {
         disk_plan_add "Open existing LUKS partition ${part}" \
             bash -c "if [ -b /dev/mapper/cryptroot ]; then echo 'LUKS already open'; else cryptsetup luksOpen '${part}' cryptroot; fi"
     else
+        # GRUB has limited LUKS2 support (only PBKDF2, not default Argon2i)
+        # Use LUKS1 when GRUB is the bootloader for compatibility
+        local luks_type_flag=""
+        if [[ "${BOOTLOADER_TYPE:-grub}" == "grub" ]]; then
+            luks_type_flag="--type luks1"
+        fi
         disk_plan_add "Setup LUKS encryption on ${part}" \
-            cryptsetup luksFormat --batch-mode "${part}"
+            cryptsetup luksFormat --batch-mode ${luks_type_flag} "${part}"
         disk_plan_add "Open LUKS partition" \
             cryptsetup luksOpen "${part}" cryptroot
     fi

@@ -226,6 +226,24 @@ validate_config() {
         fi
     fi
 
+    # --- ESP free space check (dual-boot: shared ESP must have enough room) ---
+    if [[ "${DRY_RUN:-0}" != "1" ]] && \
+       [[ "${PARTITION_SCHEME:-}" == "dual-boot" && "${ESP_REUSE:-no}" == "yes" ]] && \
+       [[ -n "${ESP_PARTITION:-}" && -b "${ESP_PARTITION:-}" ]]; then
+        local _esp_tmp="/tmp/chimera-esp-check-$$"
+        if mkdir -p "${_esp_tmp}" && mount -o ro "${ESP_PARTITION}" "${_esp_tmp}" 2>/dev/null; then
+            local _esp_free_mib
+            _esp_free_mib=$(df -BM "${_esp_tmp}" 2>/dev/null | awk 'NR==2 {gsub(/M/,"",$4); print $4}')
+            umount "${_esp_tmp}" 2>/dev/null
+            rmdir "${_esp_tmp}" 2>/dev/null
+            if [[ -n "${_esp_free_mib}" ]] && [[ "${_esp_free_mib}" -lt 64 ]]; then
+                errors+=("ESP ${ESP_PARTITION} has only ${_esp_free_mib} MiB free — need at least 64 MiB for bootloader + kernel")
+            fi
+        else
+            rmdir "${_esp_tmp}" 2>/dev/null
+        fi
+    fi
+
     # --- Output ---
     if [[ ${#errors[@]} -gt 0 ]]; then
         local err
