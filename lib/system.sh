@@ -278,8 +278,16 @@ system_create_users() {
         done
         groups="${valid_groups:-wheel}"
 
+        # Install bash (not in base-full) and use it as login shell
+        apk_install_if_available bash
+
+        local user_shell="/bin/sh"
+        if chroot_exec "test -x /bin/bash" 2>/dev/null; then
+            user_shell="/bin/bash"
+        fi
+
         try "Creating user ${USERNAME}" \
-            chroot_exec "useradd -m -G ${groups} -s /bin/sh ${USERNAME}"
+            chroot_exec "useradd -m -G ${groups} -s ${user_shell} ${USERNAME}"
 
         if [[ -n "${USER_PASSWORD_HASH:-}" ]]; then
             try "Setting user password" \
