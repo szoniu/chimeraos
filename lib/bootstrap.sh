@@ -12,14 +12,14 @@ bootstrap_install() {
     fi
 
     # chimera-bootstrap requires an empty directory
-    # If retrying after a failed attempt, clean up first
+    # If retrying after a failed attempt, or ESP/config created dirs, clean up
     if [[ -d "${MOUNTPOINT}" ]] && [[ -n "$(ls -A "${MOUNTPOINT}" 2>/dev/null)" ]]; then
         ewarn "Target directory ${MOUNTPOINT} is not empty — cleaning up"
 
-        # Unmount nested mounts EXCEPT ESP (needed for bootloader later)
+        # Unmount ALL nested mounts (including ESP — will re-mount after bootstrap)
         local -a nested_mounts
         readarray -t nested_mounts < <(awk -v mp="${MOUNTPOINT}" \
-            '$2 ~ "^"mp"/" && $2 !~ "^"mp"/boot/efi$" && $2 !~ "^"mp"/efi$" && $2 !~ "^"mp"/boot$" {print $2}' \
+            '$2 ~ "^"mp"/" {print $2}' \
             /proc/mounts 2>/dev/null | sort -r)
         local m
         for m in "${nested_mounts[@]}"; do
@@ -27,9 +27,8 @@ bootstrap_install() {
             umount -l "${m}" 2>/dev/null || true
         done
 
-        # Remove contents but keep the mount point, ESP, and lost+found
+        # Remove ALL contents (chimera-bootstrap needs a truly empty directory)
         find "${MOUNTPOINT}" -mindepth 1 -maxdepth 1 \
-            ! -name 'efi' ! -name 'boot' ! -name 'lost+found' \
             -exec rm -rf {} + 2>/dev/null || true
     fi
 
