@@ -48,17 +48,7 @@ To proceed, an existing partition must be shrunk.\n\n\
 Shrinking a partition carries a risk of data loss.\n\
 Make sure you have a full backup before continuing." || true
 
-    # Step 2: Ensure resize tools are available (install if missing on live ISO)
-    if ! command -v ntfsresize >/dev/null 2>&1; then
-        einfo "Installing ntfs-3g for NTFS resize support..."
-        apk add ntfs-3g 2>/dev/null || ewarn "ntfs-3g not available — NTFS shrink disabled"
-    fi
-    if ! command -v resize2fs >/dev/null 2>&1; then
-        einfo "Installing e2fsprogs for ext4 resize support..."
-        apk add e2fsprogs-extra 2>/dev/null || ewarn "e2fsprogs-extra not available — ext4 shrink disabled"
-    fi
-
-    # Step 3: Build list of shrinkable partitions
+    # Step 2: Build list of shrinkable partitions
     local -a shrink_items=()
     local -a shrink_parts=()
     local -a shrink_fstypes=()
@@ -75,7 +65,7 @@ Make sure you have a full backup before continuing." || true
         [[ -z "${pfstype}" ]] && continue
         disk_can_shrink_fstype "${pfstype}" || continue
 
-        # Check resize tools available (after auto-install attempt above)
+        # Check resize tools available
         case "${pfstype}" in
             ntfs) command -v ntfsresize >/dev/null 2>&1 || continue ;;
             ext4) command -v resize2fs >/dev/null 2>&1 || continue ;;
