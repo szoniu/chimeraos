@@ -324,11 +324,32 @@ _install_extras() {
 }
 
 # install_hyprland_ecosystem — Hyprland + waybar, wofi, mako, grim, slurp, wl-clipboard, brightnessctl
+# NOTE: Hyprland is NOT in Chimera repos (as of 2026-03). Must be enabled in user repo or built from source.
 install_hyprland_ecosystem() {
     if [[ "${ENABLE_HYPRLAND:-no}" != "yes" ]]; then
         return 0
     fi
     einfo "Installing Hyprland ecosystem..."
+
+    # Ensure user repo is enabled (Hyprland may appear there in the future)
+    enable_user_repo
+
+    # Check if hyprland is actually available before proceeding
+    if ! chroot_exec "apk search -e hyprland" >> "${LOG_FILE}" 2>&1; then
+        ewarn "Hyprland is not available in Chimera repos"
+        ewarn "It may need to be built from source after installation"
+        ewarn "See: https://wiki.hyprland.org/Getting-Started/Installation/"
+        ewarn "Skipping Hyprland ecosystem — installing compatible tools only"
+
+        # Install tools that work standalone (without Hyprland)
+        local -a standalone_pkgs=(waybar wofi mako grim slurp wl-clipboard brightnessctl)
+        local pkg
+        for pkg in "${standalone_pkgs[@]}"; do
+            apk_install_if_available "${pkg}"
+        done
+        return 0
+    fi
+
     local -a pkgs=(hyprland hyprpaper hypridle hyprlock
         waybar wofi mako grim slurp wl-clipboard brightnessctl
         xdg-desktop-portal-hyprland)
