@@ -69,7 +69,7 @@ apk_update() {
     # Essential tools not in base-full (needed for daily use, building from source, etc.)
     einfo "Installing essential tools..."
     apk_install "Installing essential tools" \
-        curl wget git clang base-devel pkgconf libstdc++ libgcc
+        curl wget git clang base-devel pkgconf nodejs npm
 
     einfo "Packages up to date"
 }
