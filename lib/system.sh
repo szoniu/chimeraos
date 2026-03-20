@@ -328,6 +328,26 @@ system_finalize() {
     # Set correct date/time inside chroot if possible
     chroot_exec "hwclock --systohc" 2>/dev/null || true
 
+    # Install bundled gum binary (not in Chimera repos, needed for dotfiles/scripts)
+    if [[ -x "${GUM_CACHE_DIR:-/tmp/chimera-gum}/gum" ]]; then
+        cp "${GUM_CACHE_DIR}/gum" "${MOUNTPOINT}/usr/local/bin/gum" 2>/dev/null && \
+            chmod +x "${MOUNTPOINT}/usr/local/bin/gum" && \
+            einfo "Installed gum to /usr/local/bin/gum"
+    elif [[ -f "${DATA_DIR:-}/gum.tar.gz" ]]; then
+        local _gum_tmp
+        _gum_tmp=$(mktemp -d)
+        if tar xzf "${DATA_DIR}/gum.tar.gz" -C "${_gum_tmp}" 2>/dev/null; then
+            local _gum_bin
+            _gum_bin=$(find "${_gum_tmp}" -name "gum" -type f | head -1)
+            if [[ -n "${_gum_bin}" ]]; then
+                cp "${_gum_bin}" "${MOUNTPOINT}/usr/local/bin/gum"
+                chmod +x "${MOUNTPOINT}/usr/local/bin/gum"
+                einfo "Installed gum to /usr/local/bin/gum"
+            fi
+        fi
+        rm -rf "${_gum_tmp}"
+    fi
+
     # Clean up installer artifacts from target disk
     rm -rf "${MOUNTPOINT}${CHECKPOINT_DIR_SUFFIX}" 2>/dev/null || true
     rm -f "${MOUNTPOINT}/tmp/$(basename "${CONFIG_FILE}")" 2>/dev/null || true
