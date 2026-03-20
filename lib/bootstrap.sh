@@ -66,6 +66,11 @@ apk_update() {
     try "Upgrading packages" \
         chroot_exec "apk upgrade --available"
 
+    # Essential tools not in base-full (needed for daily use, dotfiles, etc.)
+    einfo "Installing essential tools..."
+    apk_install "Installing essential tools" \
+        curl wget git
+
     einfo "Packages up to date"
 }
 
