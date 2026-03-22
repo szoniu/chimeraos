@@ -238,6 +238,30 @@ ssh -o PubkeyAuthentication=no root@ADRES_IP
 
 > **Tip**: Po restarcie Live ISO klucz SSH sie zmienia. Jesli `ssh` odmawia polaczenia ("WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED"), uruchom: `ssh-keygen -R ADRES_IP`
 
+#### Uzyj tmux — ochrona przed zerwaniem sesji SSH
+
+**Wazne:** Jesli polaczenie SSH sie zerwie, instalacja w zwyklej sesji zostanie przerwana. **Zawsze uruchamiaj installer w tmux:**
+
+```bash
+# Na Live ISO (po polaczeniu SSH):
+apk add tmux
+tmux new -s install
+
+# Sklonuj repo i uruchom installer wewnatrz tmux
+git clone https://github.com/szoniu/chimeraos.git
+cd chimeraos
+./install.sh
+```
+
+Jesli polaczenie SSH sie zerwie:
+```bash
+# Polacz sie ponownie i wroc do sesji
+ssh -o PubkeyAuthentication=no root@ADRES_IP
+tmux attach -t install
+```
+
+Instalacja bedzie nadal dzialac w tle — nic nie stracisz.
+
 ### System sie zawiesza podczas instalacji
 
 Na maszynach z mala iloscia RAM (<8 GB) kompilacja duzych pakietow moze powodowac zawieszenie. Chimera uzywa binarnych paczek, wiec problem jest rzadszy niz przy Gentoo, ale nadal mozliwy.
