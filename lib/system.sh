@@ -6,6 +6,13 @@ source "${LIB_DIR}/protection.sh"
 
 system_set_timezone() {
     local tz="${TIMEZONE:-UTC}"
+
+    # Validate timezone
+    if [[ ! -f "/usr/share/zoneinfo/${tz}" ]] && [[ ! -f "${MOUNTPOINT}/usr/share/zoneinfo/${tz}" ]]; then
+        ewarn "Invalid timezone '${tz}', falling back to UTC"
+        tz="UTC"
+    fi
+
     einfo "Setting timezone: ${tz}"
 
     try "Setting timezone" \
@@ -257,8 +264,11 @@ system_create_users() {
 
     # Set root password (chpasswd -e avoids exposing hash in process list)
     if [[ -n "${ROOT_PASSWORD_HASH:-}" ]]; then
+        # Write hash to temp file to avoid shell expansion of $ in hash
+        echo "root:${ROOT_PASSWORD_HASH}" > "${MOUNTPOINT}/tmp/.pw_hash_$$"
         try "Setting root password" \
-            chroot_exec "echo 'root:${ROOT_PASSWORD_HASH}' | chpasswd -e"
+            chroot_exec "chpasswd -e < /tmp/.pw_hash_$$ && rm -f /tmp/.pw_hash_$$"
+        rm -f "${MOUNTPOINT}/tmp/.pw_hash_$$" 2>/dev/null
     fi
 
     # Create regular user
@@ -290,8 +300,11 @@ system_create_users() {
             chroot_exec "useradd -m -G ${groups} -s ${user_shell} ${USERNAME}"
 
         if [[ -n "${USER_PASSWORD_HASH:-}" ]]; then
+            # Write hash to temp file to avoid shell expansion of $ in hash
+            echo "${USERNAME}:${USER_PASSWORD_HASH}" > "${MOUNTPOINT}/tmp/.pw_hash_$$"
             try "Setting user password" \
-                chroot_exec "echo '${USERNAME}:${USER_PASSWORD_HASH}' | chpasswd -e"
+                chroot_exec "chpasswd -e < /tmp/.pw_hash_$$ && rm -f /tmp/.pw_hash_$$"
+            rm -f "${MOUNTPOINT}/tmp/.pw_hash_$$" 2>/dev/null
         fi
 
         # Setup doas (Chimera uses doas instead of sudo by default)

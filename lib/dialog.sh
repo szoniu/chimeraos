@@ -170,7 +170,7 @@ _gum_drain_tty() {
     local _round
     for _round in 1 2; do
         sleep 0.15
-        dd if=/dev/tty of=/dev/null bs=4096 count=100 iflag=nonblock 2>/dev/null || true
+        while read -t 0.1 -rsn 1 _ </dev/tty 2>/dev/null; do :; done
     done
     while read -t 0.1 -rsn 1 _ </dev/tty 2>/dev/null; do :; done
 }

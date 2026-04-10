@@ -7,7 +7,7 @@ screen_welcome() {
     welcome_text="Welcome to the ${INSTALLER_NAME} v${INSTALLER_VERSION}
 
 This wizard will guide you through the complete installation
-of Chimera Linux with KDE Plasma desktop.
+of Chimera Linux with KDE Plasma or GNOME desktop.
 
 What this installer will do:
   * Detect your hardware (CPU, GPU, disks)

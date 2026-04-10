@@ -143,6 +143,7 @@ ensure_dependencies() {
         partprobe
         blkid
         lsblk
+        bc
     )
 
     # dialog or whiptail (need at least one)
@@ -277,47 +278,7 @@ checkpoint_migrate_to_target() {
     export CHECKPOINT_DIR
 }
 
-# cleanup_target_disk — Unmount partitions and deactivate swap on target disk
-# Must run before sfdisk/parted to avoid "device is busy" errors
-cleanup_target_disk() {
-    local disk="${TARGET_DISK:-}"
-    [[ -z "${disk}" ]] && return 0
-
-    if [[ "${DRY_RUN:-0}" == "1" ]]; then
-        einfo "[DRY-RUN] Would cleanup ${disk}"
-        return 0
-    fi
-
-    einfo "Cleaning up ${disk} before partitioning..."
-
-    # Deactivate any swap on this disk
-    local swap_dev
-    while IFS=' ' read -r swap_dev _; do
-        [[ "${swap_dev}" == "${disk}"* ]] || continue
-        ewarn "Deactivating swap on ${swap_dev}"
-        swapoff "${swap_dev}" 2>/dev/null || true
-    done < <(awk 'NR>1 {print $1}' /proc/swaps 2>/dev/null || true)
-
-    # Unmount all partitions of this disk (reverse order for nested mounts)
-    local mnt_dev mnt_point
-    while IFS=' ' read -r mnt_dev mnt_point _; do
-        [[ "${mnt_dev}" == "${disk}"* ]] || continue
-        ewarn "Unmounting ${mnt_point} (${mnt_dev})"
-        umount -l "${mnt_point}" 2>/dev/null || true
-    done < <(awk '{print $1, $2}' /proc/mounts 2>/dev/null | sort -k2 -r || true)
-
-    # Close LUKS if active on this disk
-    if command -v cryptsetup &>/dev/null; then
-        if [[ -b /dev/mapper/cryptroot ]]; then
-            local backing
-            backing=$(cryptsetup status cryptroot 2>/dev/null | awk '/device:/ {print $2}') || true
-            if [[ "${backing}" == "${disk}"* ]]; then
-                ewarn "Closing LUKS on cryptroot"
-                cryptsetup luksClose cryptroot 2>/dev/null || true
-            fi
-        fi
-    fi
-}
+# cleanup_target_disk — defined in lib/disk.sh (richer version with LUKS/fuser support)
 
 # --- Resume from disk ---
 
@@ -871,7 +832,7 @@ generate_password_hash() {
     local hash
 
     hash=$(LC_ALL=C.UTF-8 openssl passwd -6 -stdin <<< "${password}" 2>/dev/null) && [[ -n "${hash}" ]] && { echo "${hash}"; return 0; }
-    hash=$(LC_ALL=C.UTF-8 CHIMERA_PW="${password}" python3 -c "import crypt, os; print(crypt.crypt(os.environ['CHIMERA_PW'], crypt.mksalt(crypt.METHOD_SHA512)))" 2>/dev/null) && [[ -n "${hash}" ]] && { echo "${hash}"; return 0; }
+    hash=$(mkpasswd -m sha-512 --stdin <<< "${password}" 2>/dev/null) && [[ -n "${hash}" ]] && { echo "${hash}"; return 0; }
 
-    die "Cannot generate password hash — neither openssl nor python3 available"
+    die "Cannot generate password hash — neither openssl nor mkpasswd available"
 }
