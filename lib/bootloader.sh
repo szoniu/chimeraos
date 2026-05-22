@@ -30,6 +30,16 @@ _install_grub() {
         try "Mounting ESP" mount "${ESP_PARTITION}" "${MOUNTPOINT}${efi_dir}"
     fi
 
+    # UMPC portrait-panel quirk: fbcon for early console + panel_orientation
+    # for KMS-aware compositors (KWin, Mutter). Without this the first boot
+    # (GRUB -> console -> SDDM/GDM -> Plasma/GNOME) shows the image rotated
+    # because the panel is mounted physically rotated relative to the casing.
+    local default_params="quiet"
+    if [[ "${UMPC_DETECTED:-0}" == "1" ]] && [[ -n "${UMPC_PANEL_ORIENTATION:-}" ]]; then
+        default_params="${default_params} fbcon=rotate:${UMPC_FBCON_ROTATE} video=${UMPC_VIDEO_CONNECTOR}:panel_orientation=${UMPC_PANEL_ORIENTATION}"
+        einfo "UMPC panel rotation applied to GRUB_CMDLINE_LINUX_DEFAULT"
+    fi
+
     # Configure /etc/default/grub BEFORE grub-install (LUKS requires CRYPTODISK=y at install time)
     chroot_exec "mkdir -p /etc/default"
     chroot_exec "cat > /etc/default/grub << 'GRUBEOF'
@@ -37,7 +47,7 @@ GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_TIMEOUT_STYLE=menu
 GRUB_DISTRIBUTOR=\"Chimera\"
-GRUB_CMDLINE_LINUX_DEFAULT=\"quiet\"
+GRUB_CMDLINE_LINUX_DEFAULT=\"${default_params}\"
 GRUBEOF"
 
     if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then
@@ -88,9 +98,27 @@ _install_systemd_boot() {
     try "Installing systemd-boot" \
         chroot_exec "bootctl install"
 
+    # UMPC portrait-panel quirk: fbcon for early console + panel_orientation
+    # for KMS-aware compositors. Drop a cmdline fragment so gen-systemd-boot
+    # picks it up when it generates the entry options.
+    if [[ "${UMPC_DETECTED:-0}" == "1" ]] && [[ -n "${UMPC_PANEL_ORIENTATION:-}" ]]; then
+        local umpc_cmdline="fbcon=rotate:${UMPC_FBCON_ROTATE} video=${UMPC_VIDEO_CONNECTOR}:panel_orientation=${UMPC_PANEL_ORIENTATION}"
+        chroot_exec "mkdir -p /etc/cmdline.d"
+        chroot_exec "printf '%s\n' '${umpc_cmdline}' > /etc/cmdline.d/10-umpc-rotation.conf"
+        einfo "UMPC panel rotation written to /etc/cmdline.d/10-umpc-rotation.conf"
+    fi
+
     # Generate boot entries
     try "Generating boot entries" \
         chroot_exec "gen-systemd-boot"
+
+    # Belt-and-suspenders: ensure the rotation params are present in the
+    # generated entry options (in case gen-systemd-boot ignores /etc/cmdline.d).
+    if [[ "${UMPC_DETECTED:-0}" == "1" ]] && [[ -n "${UMPC_PANEL_ORIENTATION:-}" ]]; then
+        local umpc_params="fbcon=rotate:${UMPC_FBCON_ROTATE} video=${UMPC_VIDEO_CONNECTOR}:panel_orientation=${UMPC_PANEL_ORIENTATION}"
+        chroot_exec "for f in /boot/loader/entries/*.conf; do [ -f \"\$f\" ] || continue; grep -q 'panel_orientation=' \"\$f\" && continue; if grep -q '^options ' \"\$f\"; then sed -i \"s|^options .*|& ${umpc_params}|\" \"\$f\"; else printf 'options %s\n' '${umpc_params}' >> \"\$f\"; fi; done" || true
+        einfo "UMPC panel rotation applied to systemd-boot entry options"
+    fi
 
     # LUKS support: regenerate initramfs with crypttab, regenerate boot entries
     if [[ "${LUKS_ENABLED:-no}" == "yes" ]]; then

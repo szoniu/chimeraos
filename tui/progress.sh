@@ -18,6 +18,7 @@ readonly -a INSTALL_PHASES=(
     "desktop|Desktop installation"
     "users|User configuration"
     "extras|Extra packages"
+    "umpc_quirks|UMPC quirks"
     "finalize|Finalization"
 )
 
@@ -257,6 +258,13 @@ _execute_phase() {
             install_thunderbolt_tools
             install_sensor_tools
             install_wwan_tools
+            ;;
+        umpc_quirks)
+            # Panel rotation cmdline is already set in the bootloader phase;
+            # this installs runtime services (ALC287 unmute), the SDDM greeter
+            # rotation, and the POST-INSTALL note for gpd-fan-daemon. Skipped
+            # silently when no UMPC is detected, so cost is zero otherwise.
+            umpc_apply_quirks
             ;;
         finalize)
             system_finalize

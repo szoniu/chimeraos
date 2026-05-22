@@ -35,6 +35,7 @@ source "${LIB_DIR}/system.sh"
 source "${LIB_DIR}/bootloader.sh"
 source "${LIB_DIR}/desktop.sh"
 source "${LIB_DIR}/swap.sh"
+source "${LIB_DIR}/umpc.sh"
 source "${LIB_DIR}/hooks.sh"
 source "${LIB_DIR}/preset.sh"
 

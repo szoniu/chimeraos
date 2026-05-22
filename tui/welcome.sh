@@ -33,6 +33,26 @@ Press OK to check prerequisites and continue."
 
     dialog_msgbox "Welcome" "${welcome_text}" || return "${TUI_ABORT}"
 
+    # Architecture gate — checked FIRST, before any other prerequisite and before
+    # anything touches the disk. This installer is x86_64 only; on aarch64/ARM
+    # (Microsoft Surface Laptop 7 / Snapdragon X, ARM laptops & SBCs) it would
+    # bootstrap an x86_64 system, wipe the disk, then fail on the first chroot
+    # exec — bricking the machine. NOT bypassable with --force.
+    if ! is_supported_arch; then
+        dialog_msgbox "Unsupported architecture" \
+"Detected CPU architecture: $(uname -m 2>/dev/null || echo unknown)
+
+This installer supports ONLY amd64 / x86-64.
+
+ARM/aarch64 machines — including the Microsoft Surface Laptop 7 and
+other Qualcomm Snapdragon X laptops, ARM laptops and SBCs — are NOT
+supported: chimera-bootstrap, the apk packages, GRUB target and bundled
+tools are all x86-64. Proceeding would wipe the disk and then fail.
+
+Installation aborted. No changes were made to any disk."
+        return "${TUI_ABORT}"
+    fi
+
     # Check prerequisites
     local -a errors=()
     local -a warnings=()
