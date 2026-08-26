@@ -525,28 +525,47 @@ mount_filesystems() {
 
     local fs="${FILESYSTEM:-ext4}"
 
-    if [[ "${fs}" == "btrfs" ]]; then
-        try "Mounting btrfs root" mount "${ROOT_PARTITION}" "${MOUNTPOINT}"
+    # Idempotencja. Ta funkcja jest wołana także przy --resume, gdy root bywa
+    # JUŻ zamontowany (wczesny mount w progress.sh albo poprzedni przebieg).
+    # Poprzednia wersja montowała bezwarunkowo, a na btrfs było to wręcz
+    # destrukcyjne: mount top-level na zajętym mountpoincie, a zaraz po nim
+    # `umount "${MOUNTPOINT}"` — czyli odmontowanie tego, co już działało.
+    local root_already_mounted=0
+    if mountpoint -q "${MOUNTPOINT}" 2>/dev/null; then
+        root_already_mounted=1
+        einfo "Root już zamontowany w ${MOUNTPOINT} — pomijam montowanie roota"
+    fi
 
-        if [[ -n "${BTRFS_SUBVOLUMES:-}" ]]; then
-            local IFS=':'
-            local -a parts
-            read -ra parts <<< "${BTRFS_SUBVOLUMES}"
-            local idx
-            for (( idx = 0; idx < ${#parts[@]}; idx += 2 )); do
-                local subvol="${parts[$idx]}"
-                if ! btrfs subvolume list "${MOUNTPOINT}" 2>/dev/null | grep -q " ${subvol}$"; then
-                    try "Creating btrfs subvolume ${subvol}" \
-                        btrfs subvolume create "${MOUNTPOINT}/${subvol}"
-                fi
-            done
+    if [[ "${fs}" == "btrfs" ]]; then
+        # TWORZENIE subwoluminów zostaje wyłącznie w ścieżce świeżej instalacji:
+        # wymaga mounta top-level, a przy resume subwoluminy już istnieją.
+        if [[ ${root_already_mounted} -eq 0 ]]; then
+            try "Mounting btrfs root" mount "${ROOT_PARTITION}" "${MOUNTPOINT}"
+
+            if [[ -n "${BTRFS_SUBVOLUMES:-}" ]]; then
+                local IFS=':'
+                local -a parts
+                read -ra parts <<< "${BTRFS_SUBVOLUMES}"
+                local idx
+                for (( idx = 0; idx < ${#parts[@]}; idx += 2 )); do
+                    local subvol="${parts[$idx]}"
+                    if ! btrfs subvolume list "${MOUNTPOINT}" 2>/dev/null | grep -q " ${subvol}$"; then
+                        try "Creating btrfs subvolume ${subvol}" \
+                            btrfs subvolume create "${MOUNTPOINT}/${subvol}"
+                    fi
+                done
+            fi
+
+            umount "${MOUNTPOINT}"
+
+            try "Mounting @ subvolume" \
+                mount -o subvol=@,compress=zstd,noatime "${ROOT_PARTITION}" "${MOUNTPOINT}"
         fi
 
-        umount "${MOUNTPOINT}"
-
-        try "Mounting @ subvolume" \
-            mount -o subvol=@,compress=zstd,noatime "${ROOT_PARTITION}" "${MOUNTPOINT}"
-
+        # MONTOWANIE pozostałych subwoluminów leci ZAWSZE, także przy resume —
+        # wcześniej siedziało w tej samej gałęzi co tworzenie, więc wznowiona
+        # instalacja miała zamontowany tylko @, a /home, /var itd. lądowały
+        # jako zwykłe katalogi wewnątrz @. Każdy mount bramkowany osobno.
         if [[ -n "${BTRFS_SUBVOLUMES:-}" ]]; then
             local IFS=':'
             local -a parts
@@ -557,31 +576,40 @@ mount_filesystems() {
                 local mpoint="${parts[$((idx + 1))]}"
                 [[ "${subvol}" == "@" ]] && continue
                 mkdir -p "${MOUNTPOINT}${mpoint}"
+                if mountpoint -q "${MOUNTPOINT}${mpoint}" 2>/dev/null; then
+                    einfo "Subwolumin ${subvol} już zamontowany w ${mpoint}"
+                    continue
+                fi
                 try "Mounting subvolume ${subvol} at ${mpoint}" \
                     mount -o "subvol=${subvol},compress=zstd,noatime" \
                     "${ROOT_PARTITION}" "${MOUNTPOINT}${mpoint}"
             done
         fi
-    else
+    elif [[ ${root_already_mounted} -eq 0 ]]; then
         try "Mounting root filesystem" mount "${ROOT_PARTITION}" "${MOUNTPOINT}"
     fi
 
     # CRITICAL: Chimera Linux requires correct permissions on root
     chmod 755 "${MOUNTPOINT}"
 
-    # Mount boot and ESP
-    if [[ "${BOOTLOADER_TYPE:-grub}" == "systemd-boot" ]]; then
-        mkdir -p "${MOUNTPOINT}/boot"
-        try "Mounting ESP at /boot" mount "${ESP_PARTITION}" "${MOUNTPOINT}/boot"
+    # Mount boot and ESP. Bramkowane tak samo jak root — przy resume ESP bywa
+    # już zamontowany, a drugi mount na tym samym punkcie kończył fazę błędem.
+    local _esp_mp="${MOUNTPOINT}/boot/efi"
+    [[ "${BOOTLOADER_TYPE:-grub}" == "systemd-boot" ]] && _esp_mp="${MOUNTPOINT}/boot"
+    mkdir -p "${_esp_mp}"
+    if ! mountpoint -q "${_esp_mp}" 2>/dev/null; then
+        try "Mounting ESP at ${_esp_mp#"${MOUNTPOINT}"}" mount "${ESP_PARTITION}" "${_esp_mp}"
     else
-        mkdir -p "${MOUNTPOINT}/boot"
-        mkdir -p "${MOUNTPOINT}/boot/efi"
-        try "Mounting ESP at /boot/efi" mount "${ESP_PARTITION}" "${MOUNTPOINT}/boot/efi"
+        einfo "ESP już zamontowany w ${_esp_mp#"${MOUNTPOINT}"}"
     fi
 
     # Activate swap if partition
     if [[ "${SWAP_TYPE:-}" == "partition" && -n "${SWAP_PARTITION:-}" ]]; then
-        try "Activating swap" swapon "${SWAP_PARTITION}"
+        if swapon --show=NAME --noheadings 2>/dev/null | grep -qxF "${SWAP_PARTITION}"; then
+            einfo "Swap ${SWAP_PARTITION} już aktywny"
+        else
+            try "Activating swap" swapon "${SWAP_PARTITION}"
+        fi
     fi
 
     einfo "Filesystems mounted at ${MOUNTPOINT}"
