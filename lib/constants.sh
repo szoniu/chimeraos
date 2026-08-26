@@ -51,11 +51,17 @@ readonly -a CHECKPOINTS=(
     "kernel"
     "fstab"
     "system_config"
+    # users MUSI iść przed bootloader/desktop. Wcześniej stało za "desktop",
+    # czyli za najdłuższą i najbardziej awaryjną fazą instalacji: gdy desktop
+    # padał, users nigdy nie ruszało i system wstawał z rootem na zablokowanym
+    # hashu "*" z bootstrapu, bez konta użytkownika — nikt się nie logował
+    # (greeter bez usera, SSH root zablokowany). Efekt uboczny na plus:
+    # konfiguracje pisane przez fazę desktop do /etc/skel mają dokąd trafić.
+    "users"
     "bootloader"
     "swap_setup"
     "networking"
     "desktop"
-    "users"
     "extras"
     "umpc_quirks"
     "finalize"

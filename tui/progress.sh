@@ -12,11 +12,11 @@ readonly -a INSTALL_PHASES=(
     "kernel|Kernel installation"
     "fstab|Filesystem table"
     "system_config|System configuration"
+    "users|User configuration"
     "bootloader|Bootloader installation"
     "swap_setup|Swap configuration"
     "networking|Network configuration"
     "desktop|Desktop installation"
-    "users|User configuration"
     "extras|Extra packages"
     "umpc_quirks|UMPC quirks"
     "finalize|Finalization"
@@ -257,6 +257,20 @@ _execute_phase() {
             desktop_install
             ;;
         users)
+            # Hashe haseł NIE są inferowalne przy --resume: config na dysku może
+            # ich nie mieć, a odgadnąć się nie da. Bez tej bramki faza cicho
+            # tworzyłaby konto bez hasła i ustawiała checkpoint, czyli dokładnie
+            # ten sam lockout, który przeniesienie fazy wyżej ma eliminować.
+            # Świadomie BEZ checkpointu (return przed checkpoint_set na końcu
+            # funkcji) — przy kolejnym resume faza pójdzie jeszcze raz, zamiast
+            # zostać pominięta jako "zrobiona".
+            if [[ -z "${ROOT_PASSWORD_HASH:-}" ]]; then
+                eerror "ROOT_PASSWORD_HASH jest pusty — pomijam tworzenie użytkowników"
+                eerror "Bez tego system wstanie BEZ MOŻLIWOŚCI LOGOWANIA."
+                eerror "Recovery: live USB -> chroot -> passwd + useradd,"
+                eerror "albo uruchom instalator ponownie i podaj hasła w wizardzie."
+                return 1
+            fi
             system_create_users
             ;;
         extras)
