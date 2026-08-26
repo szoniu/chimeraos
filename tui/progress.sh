@@ -218,6 +218,9 @@ _execute_phase() {
                 disk_execute_plan
             fi
             mount_filesystems
+            # Target jest zamontowany — od teraz log leży na dysku,
+            # nie na tmpfs live ISO, więc przetrwa reboot i resume.
+            log_relocate_to_target
             checkpoint_migrate_to_target
             _save_config_to_target
             ;;
