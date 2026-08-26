@@ -849,3 +849,45 @@ generate_password_hash() {
 
     die "Cannot generate password hash — neither openssl nor mkpasswd available"
 }
+
+# _resume_target_has_system — True if the planned root partition already holds
+# an installed Chimera Linux system. A missing 'disks' checkpoint does NOT mean the
+# disk is empty: checkpoint-migration glitches, checkpoint_validate pruning or
+# an aborted re-run can drop it while a fully installed system still sits
+# there. Reformatting on that basis destroys hours of work — this probes
+# READ-ONLY (side-effect free) so the disks phase can refuse the destructive
+# plan and mount what is already present instead.
+#
+# Ported from the Gentoo installer, where a blind reformat nearly wiped a built
+# system twice on a GPD Pocket 4 recovery, and from void (c3f2020).
+#
+# btrfs installs live under subvol=@, so that mount is tried first: a
+# top-level mount succeeds but shows only the subvolumes as directories, so
+# every marker below would miss and the probe would wrongly report "empty".
+_resume_target_has_system() {
+    [[ "${DRY_RUN:-0}" == "1" ]] && return 1
+
+    local root="${ROOT_PARTITION:-}"
+    [[ -b "${root}" ]] || root="${RESUME_FOUND_PARTITION:-}"
+    [[ -b "${root}" ]] || return 1
+
+    local probe found=1 opt
+    probe=$(mktemp -d) || return 1
+
+    for opt in "ro,subvol=@" "ro"; do
+        if mount -o "${opt}" "${root}" "${probe}" 2>/dev/null; then
+            # Chimera markers: an ID=chimera os-release or the apk database
+            # (Chimera uses apk, like Alpine, but is otherwise unrelated).
+            if grep -q '^ID=chimera' "${probe}/etc/os-release" 2>/dev/null || \
+               [[ -d "${probe}/lib/apk/db" ]] || \
+               [[ -f "${probe}/etc/chimera-release" ]]; then
+                found=0
+            fi
+            umount "${probe}" 2>/dev/null || umount -l "${probe}" 2>/dev/null || true
+            [[ ${found} -eq 0 ]] && break
+        fi
+    done
+
+    rmdir "${probe}" 2>/dev/null || true
+    return ${found}
+}
