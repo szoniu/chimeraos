@@ -165,14 +165,22 @@ assert_eq "ROOT_PARTITION preserved" "/dev/sda3" "${ROOT_PARTITION}"
 echo ""
 echo "=== Test: Partition prefix logic ==="
 
-# /dev/sda → sda3 (no p separator)
-part_prefix="/dev/sda"
-[[ "/dev/sda" =~ [0-9]$ ]] && part_prefix="/dev/sdap"
-assert_eq "sda prefix (no trailing digit)" "/dev/sda" "${part_prefix}"
+# /dev/sda → sda3 (no p separator), /dev/nvme0n1 → nvme0n1p3.
+# Nazwa dysku idzie przez zmienną po obu stronach dopasowania. Z literałem
+# lint słusznie zgłasza wyrażenie stałe (SC2050) — literał nie może zmieniać
+# się tak jak realne wejście. Uwaga: wiersz komentarza NIE może zaczynać się
+# od słowa "shellcheck", bo zostanie sparsowany jako dyrektywa (SC1072/SC1073).
+_prefix_for() {
+    local disk="$1"
+    if [[ "${disk}" =~ [0-9]$ ]]; then
+        echo "${disk}p"
+    else
+        echo "${disk}"
+    fi
+}
 
-part_prefix="/dev/nvme0n1"
-[[ "/dev/nvme0n1" =~ [0-9]$ ]] && part_prefix="/dev/nvme0n1p"
-assert_eq "nvme prefix (trailing digit)" "/dev/nvme0n1p" "${part_prefix}"
+assert_eq "sda prefix (no trailing digit)" "/dev/sda" "$(_prefix_for /dev/sda)"
+assert_eq "nvme prefix (trailing digit)" "/dev/nvme0n1p" "$(_prefix_for /dev/nvme0n1)"
 
 # =============================================================================
 echo ""
